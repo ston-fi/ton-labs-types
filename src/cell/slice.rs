@@ -156,7 +156,7 @@ impl SliceData {
     pub fn from_string(value: &str) -> Result<SliceData> {
         Ok(parse_slice_base(value, 0, 16)
             .ok_or_else(|| error!(ExceptionCode::FatalError))
-            .and_then(|vec| BuilderData::with_bitstring(vec))?
+            .and_then(BuilderData::with_bitstring)?
             .into_cell()?
             .into())
     }

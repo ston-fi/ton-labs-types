@@ -29,10 +29,10 @@ pub type Leaf = Result<Option<SliceData>>;
 
 pub const ADD: u8 = 0x01;
 pub const REPLACE: u8 = 0x02;
-const EMPTY_LABEL_MARKER: u8 = 0b00_000000;
-const SHORT_LABEL_PREFIX: u8 = 0b0_0000000; // hml_short constructor, binary 0
-const LONG_LABEL_PREFIX: u8 = 0b10_000000; // hml_long, binary 10
-const SAME_LABEL_PREFIX: u8 = 0b11_000000; // hml_same, binary 11
+const EMPTY_LABEL_MARKER: u8 = 0b0000_0000;
+const SHORT_LABEL_PREFIX: u8 = 0b0000_0000; // hml_short constructor, binary 0
+const LONG_LABEL_PREFIX: u8 = 0b1000_0000; // hml_long, binary 10
+const SAME_LABEL_PREFIX: u8 = 0b1100_0000; // hml_same, binary 11
 
 // hml_long$10 n:(#<= m) s:n*bit = HmLabel ~n m;
 fn hml_long(key: &SliceData, len: usize) -> Result<BuilderData> {

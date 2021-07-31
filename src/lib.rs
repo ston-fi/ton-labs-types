@@ -11,6 +11,8 @@
 * limitations under the License.
 */
 
+#![allow(clippy::derive_hash_xor_eq)]
+
 pub mod types;
 pub use self::types::*;
 

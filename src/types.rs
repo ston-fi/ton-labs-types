@@ -75,7 +75,7 @@ impl PartialEq<SliceData> for &UInt256 {
 impl PartialEq<Vec<u8>> for UInt256 {
     fn eq(&self, other: &Vec<u8>) -> bool {
         if other.len() == 32 {
-            return &self.0 == other.as_slice()
+            return self.0 == other.as_slice()
         }
         false
     }
@@ -120,9 +120,6 @@ impl UInt256 {
     pub fn to_hex_string(&self) -> String {
         hex::encode(self.0)
     }
-
-    // to be deleted
-    pub fn from_str(value: &str) -> Result<Self> { FromStr::from_str(value) }
 
     pub fn calc_file_hash(bytes: &[u8]) -> Self {
         let hash: [u8; 32] = sha2::Sha256::digest(bytes).into();
@@ -183,28 +180,15 @@ impl From<[u8; 32]> for UInt256 {
     }
 }
 
-impl Into<[u8; 32]> for UInt256 {
-    fn into(self) -> [u8; 32] {
-        self.0
+impl From<UInt256> for [u8; 32] {
+    fn from(data: UInt256) -> Self {
+        data.0
     }
 }
 
 impl From<&[u8; 32]> for UInt256 {
     fn from(data: &[u8; 32]) -> Self {
         UInt256(*data)
-    }
-}
-
-impl From<&[u8]> for UInt256 {
-    fn from(value: &[u8]) -> Self { Self::from_le_bytes(value) }
-}
-
-impl From<Vec<u8>> for UInt256 {
-    fn from(value: Vec<u8>) -> Self {
-        match value.try_into() {
-            Ok(hash) => Self(hash),
-            Err(value) => UInt256::from_le_bytes(value.as_slice())
-        }
     }
 }
 
