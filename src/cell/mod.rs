@@ -656,8 +656,8 @@ impl CellData {
             }
             writer.write_all(&[1])?;
             writer.write_all(&[len as u8])?;
-            for hash in hashes {
-                writer.write_all(hash.as_slice())?;
+            for i in 0..len {
+                writer.write_all(hashes[i].as_slice())?;
             }
         } else {
             writer.write_all(&[0])?;
@@ -669,8 +669,8 @@ impl CellData {
             }
             writer.write_all(&[1])?;
             writer.write_all(&[len as u8])?;
-            for depth in depths {
-                writer.write_all(&depth.to_le_bytes())?;
+            for i in 0..len {
+                writer.write_all(&depths[i].to_le_bytes())?;
             }
         } else {
             writer.write_all(&[0])?;
