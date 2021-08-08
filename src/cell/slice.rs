@@ -295,7 +295,7 @@ impl SliceData {
             && self.data_window.end == self.cell.bit_length() {
             self.cell.clone()
         } else {
-            BuilderData::from_slice(&self).into_cell().expect("it must not fail because builder made from cell cut by slice")
+            BuilderData::from_slice(self).into_cell().expect("it must not fail because builder made from cell cut by slice")
         }
     }
 
@@ -560,7 +560,7 @@ impl SliceData {
             self.shrink_data(0..0);
             true
         } else {
-            match SliceData::common_prefix(&self, prefix) {
+            match SliceData::common_prefix(self, prefix) {
                 (_, _, Some(_)) => false, // prefix should be fully in self
                 (_, Some(remainder), _) => {
                     *self = remainder;

@@ -422,7 +422,7 @@ pub trait HashmapType {
     }
     fn make_edge(key: &SliceData, bit_len: usize, is_left: bool, mut next: SliceData) -> Result<BuilderData> {
         let mut next_bit_len = bit_len.checked_sub(key.remaining_bits() + 1).ok_or(ExceptionCode::CellUnderflow)?;
-        let mut label = BuilderData::from_slice(&key);
+        let mut label = BuilderData::from_slice(key);
         label.append_bit_bool(!is_left)?;
         label = next.get_label_raw(&mut next_bit_len, label)?;
         let is_leaf = Self::is_leaf(&mut next);
@@ -609,14 +609,14 @@ pub trait HashmapType {
         };
         cursor = SliceData::from(left);
         let label = cursor.get_label(bit_len)?;
-        let mut builder = BuilderData::from_slice(&key);
+        let mut builder = BuilderData::from_slice(key);
         builder.append_bit_zero()?;
         builder.append_bytestring(&label)?;
         let left = Self::make_cell_with_label_and_data(builder.into_cell()?.into(), self.bit_len(), false, &cursor)?;
 
         cursor = SliceData::from(right);
         let label = cursor.get_label(bit_len)?;
-        let mut builder = BuilderData::from_slice(&key);
+        let mut builder = BuilderData::from_slice(key);
         builder.append_bit_one()?;
         builder.append_bytestring(&label)?;
         let right = Self::make_cell_with_label_and_data(builder.into_cell()?.into(), self.bit_len(), false, &cursor)?;
@@ -645,7 +645,7 @@ pub trait HashmapType {
         match SliceData::common_prefix(&label1, &label2) {
             (prefix, Some(mut left), Some(mut right)) => {
                 let prefix = prefix.unwrap_or_default();
-                if let (_, _, Some(_)) = SliceData::common_prefix(&prefix, &key) {
+                if let (_, _, Some(_)) = SliceData::common_prefix(&prefix, key) {
                     fail!("common prefix of merging hashmaps is too short")
                 }
                 let left_bit = left.get_next_bit()?;

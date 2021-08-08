@@ -628,12 +628,12 @@ impl CellData {
                     depth.copy_from_slice(&self.data()[offset..offset + 2]);
                     return u16::from_be_bytes(depth);
                 }
-            } else if let Some(ref depths) = self.depths() {
+            } else if let Some(depths) = self.depths() {
                 if let Some(d) = depths.get(0) {
                     return *d;
                 }
             }
-        } else if let Some(ref depths) = self.depths() {
+        } else if let Some(depths) = self.depths() {
             if let Some(d) = depths.get(index as usize) {
                 return *d;
             }
@@ -908,13 +908,13 @@ impl DataCell {
                 level_mask.mask(),
                 self.cell_type() != CellType::Ordinary,
                 false);
-            hasher.input(&[d1, d2]);
+            hasher.update(&[d1, d2]);
 
             if i == 0 {
                 let data_size = (bit_len / 8) + if bit_len % 8 != 0 { 1 } else { 0 };
-                hasher.input(&self.data()[..data_size]);
+                hasher.update(&self.data()[..data_size]);
             } else {
-                hasher.input(hashes[i - 1].as_slice());
+                hasher.update(hashes[i - 1].as_slice());
             }
 
             // depth
@@ -924,16 +924,16 @@ impl DataCell {
                 if ((max_depth != 0) && (depths[i] > max_depth)) || (depths[i] > MAX_DEPTH) {
                     fail!("fail creating cell: depth {} > {}", depths[i], std::cmp::max(max_depth, MAX_DEPTH))
                 }
-                hasher.input(&child_depth.to_be_bytes());
+                hasher.update(&child_depth.to_be_bytes());
             }
 
             // hashes
             for child in self.references.iter() {
                 let child_hash = child.hash(if is_merkle_cell { i + 1 } else { i });
-                hasher.input(child_hash.as_slice());
+                hasher.update(child_hash.as_slice());
             }
 
-            hashes[i] = From::<[u8; 32]>::from(hasher.result().into());
+            hashes[i] = From::<[u8; 32]>::from(hasher.finalize().into());
             // debug_assert_ne!(hashes[i], UInt256::DEFAULT_CELL_HASH);
         }
 
@@ -974,7 +974,7 @@ impl DataCell {
 
 impl CellImpl for DataCell {
     fn data(&self) -> &[u8] {
-        &self.cell_data.data()
+        self.cell_data.data()
     }
 
     fn cell_data(&self) -> &CellData {
