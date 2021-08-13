@@ -16,38 +16,37 @@ use num::FromPrimitive;
 use sha2::Digest;
 use std::{cmp, convert::TryInto, fmt, fmt::{LowerHex, UpperHex}, str::{self, FromStr}};
 
-
-pub type Result<T> = std::result::Result<T, failure::Error>;
-pub type Failure = Option<failure::Error>;
-pub type Status = Result<()>;
+pub type Result<T> = anyhow::Result<T>;
+pub type Failure = Option<anyhow::Error>;
+pub type Status = anyhow::Result<()>;
 
 #[macro_export]
 macro_rules! error {
     ($error:literal) => {
-        failure::err_msg(format!("{} {}:{}", $error, file!(), line!()))
+        anyhow::anyhow!(format!("{} {}:{}", $error, file!(), line!()))
     };
     ($error:expr) => {
-        failure::Error::from($error)
+        anyhow::Error::from($error)
     };
     ($fmt:expr, $($arg:tt)+) => {
-        failure::err_msg(format!("{} {}:{}", format!($fmt, $($arg)*), file!(), line!()))
+        anyhow::Error::msg(format!("{} {}:{}", format!($fmt, $($arg)*), file!(), line!()))
     };
 }
 
 #[macro_export]
 macro_rules! fail {
     ($error:literal) => {
-        return Err(failure::err_msg(format!("{} {}:{}", $error, file!(), line!())))
+        anyhow::bail!("{} {}:{}", $error, file!(), line!())
     };
     // uncomment to explicit panic for any ExceptionCode
     // (ExceptionCode::CellUnderflow) => {
     //     panic!("{}", error!(ExceptionCode::CellUnderflow))
     // };
     ($error:expr) => {
-        return Err(error!($error))
+        anyhow::bail!($error)
     };
     ($fmt:expr, $($arg:tt)*) => {
-        return Err(failure::err_msg(format!("{} {}:{}", format!($fmt, $($arg)*), file!(), line!())))
+        anyhow::bail!("{} {}:{}", format!($fmt, $($arg)*), file!(), line!())
     };
 }
 
@@ -193,7 +192,7 @@ impl From<&[u8; 32]> for UInt256 {
 }
 
 impl FromStr for UInt256 {
-    type Err = failure::Error;
+    type Err = anyhow::Error;
     fn from_str(value: &str) -> Result<Self> {
         let bytes = match value.len() {
             64 => hex::decode(value)?,
@@ -277,7 +276,7 @@ impl From<&UInt256> for AccountId {
 }
 
 impl str::FromStr for AccountId {
-    type Err = failure::Error;
+    type Err = anyhow::Error;
     fn from_str(value: &str) -> Result<Self> {
         let uint = UInt256::from_str(value)?;
         Ok(AccountId::from(uint.0))
@@ -286,36 +285,36 @@ impl str::FromStr for AccountId {
 
 // Exceptions *****************************************************************
 
-#[derive(Clone, Copy, Debug, num_derive::FromPrimitive, PartialEq, Eq, failure::Fail)]
+#[derive(Clone, Copy, Debug, num_derive::FromPrimitive, PartialEq, Eq, thiserror::Error)]
 pub enum ExceptionCode {
-    #[fail(display = "normal termination")]
+    #[error("normal termination")]
     NormalTermination = 0,
-    #[fail(display = "alternative termination")]
+    #[error("alternative termination")]
     AlternativeTermination = 1,
-    #[fail(display = "stack underflow")]
+    #[error("stack underflow")]
     StackUnderflow = 2,
-    #[fail(display = "stack overflow")]
+    #[error("stack overflow")]
     StackOverflow = 3,
-    #[fail(display = "integer overflow")]
+    #[error("integer overflow")]
     IntegerOverflow = 4,
-    #[fail(display = "range check error")]
+    #[error("range check error")]
     RangeCheckError = 5,
-    #[fail(display = "invalid opcode")]
+    #[error("invalid opcode")]
     InvalidOpcode = 6,
-    #[fail(display = "type check error")]
+    #[error("type check error")]
     TypeCheckError = 7,
-    #[fail(display = "cell overflow")]
+    #[error("cell overflow")]
     CellOverflow = 8,
-    #[fail(display = "cell underflow")]
+    #[error("cell underflow")]
     CellUnderflow = 9,
-    #[fail(display = "dictionaty error")]
+    #[error("dictionaty error")]
     DictionaryError = 10,
-    #[fail(display = "unknown error")]
+    #[error("unknown error")]
     UnknownError = 11,
-    #[fail(display = "fatal error")]
+    #[error("fatal error")]
     FatalError = 12,
-    #[fail(display = "out of gas")]
-    OutOfGas = 13
+    #[error("out of gas")]
+    OutOfGas = 13,
 }
 
 /*
