@@ -37,4 +37,4 @@ anyhow = "1"
 thiserror = "1.0.26"
 
 [features]
-sha-asm = ["sha2/asm"]
+asm = ["sha2/asm"]
