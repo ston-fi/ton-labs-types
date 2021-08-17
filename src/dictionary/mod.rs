@@ -21,6 +21,7 @@ use crate::types::{ExceptionCode, Result};
 
 pub use self::hashmap::HashmapE;
 pub use self::pfxhashmap::PfxHashmapE;
+use smallvec::SmallVec;
 
 mod hashmap;
 mod pfxhashmap;
@@ -36,7 +37,7 @@ const SAME_LABEL_PREFIX: u8 = 0b1100_0000; // hml_same, binary 11
 
 // hml_long$10 n:(#<= m) s:n*bit = HmLabel ~n m;
 fn hml_long(key: &SliceData, len: usize) -> Result<BuilderData> {
-    let mut label = BuilderData::with_raw(vec![LONG_LABEL_PREFIX], 2)?;
+    let mut label = BuilderData::with_raw(SmallVec::from_slice(&[LONG_LABEL_PREFIX]), 2)?;
     label.append_bits(key.remaining_bits(), len)?;
     label.append_bytestring(key)?;
     Ok(label)
@@ -44,7 +45,7 @@ fn hml_long(key: &SliceData, len: usize) -> Result<BuilderData> {
 
 // hml_short$0 {n:#} len:(Unary ~n) s:n*bit = HmLabel ~n m;
 fn hml_short(key: &SliceData) -> Option<BuilderData> {
-    let mut label = BuilderData::with_raw(vec![SHORT_LABEL_PREFIX], 1).ok()?;
+    let mut label = BuilderData::with_raw(SmallVec::from_slice(&[SHORT_LABEL_PREFIX]), 1).ok()?;
     let length = key.remaining_bits();
     for _ in 0..length / 32 {
         label.append_bits(std::u32::MAX as usize, 32).ok()?;
@@ -73,14 +74,14 @@ fn hml_same(key: &SliceData, len: usize) -> Option<BuilderData> {
         }
     }
 
-    let mut label = BuilderData::with_raw(vec![SAME_LABEL_PREFIX], 2).ok()?;
+    let mut label = BuilderData::with_raw(SmallVec::from_slice(&[SAME_LABEL_PREFIX]), 2).ok()?;
     label.append_bit_bool(!zero_bit_found).ok()?;
     label.append_bits(bits, len).ok()?;
     Some(label)
 }
 
 pub fn hm_empty() -> Result<BuilderData> {
-    BuilderData::with_raw(vec![EMPTY_LABEL_MARKER], 2)
+    BuilderData::with_raw(SmallVec::from_slice(&[EMPTY_LABEL_MARKER]), 2)
 }
 
 pub fn hm_label(key: &SliceData, max: usize) -> Result<BuilderData> {

@@ -21,6 +21,7 @@ use num::{BigInt, bigint::Sign};
 
 use crate::{error, fail, cell::{BuilderData, Cell, CellType, IBitstring, LevelMask}, parse_slice_base};
 use crate::types::{ExceptionCode, Result, UInt256};
+use smallvec::SmallVec;
 
 
 #[derive(Eq, Clone)]
@@ -237,15 +238,15 @@ impl SliceData {
         let trailing = self.data_window.start % 8;
         if trailing == 0 {
             BuilderData::with_raw(
-                self.cell.data()[start..=end].to_vec(),
+                SmallVec::from_slice(&self.cell.data()[start..=end]),
                 self.remaining_bits()
             ).unwrap()
         } else if trailing + self.remaining_bits() <= 8 {
             let vec = vec![self.cell.data()[start] << trailing];
-            BuilderData::with_raw(vec, self.remaining_bits()).unwrap()
+            BuilderData::with_raw(vec.into(), self.remaining_bits()).unwrap()
         } else {
             let vec = vec![self.cell.data()[start] << trailing];
-            let mut builder = BuilderData::with_raw(vec, 8 - trailing).unwrap();
+            let mut builder = BuilderData::with_raw(vec.into(), 8 - trailing).unwrap();
             builder.append_raw(& self.cell.data()[start + 1..=end], trailing + self.remaining_bits() - 8).unwrap();
             builder
         }
@@ -688,12 +689,12 @@ impl SliceData {
     pub fn new(data: Vec<u8>) -> SliceData {
         match crate::find_tag(data.as_slice()) {
             0 => SliceData::default(),
-            length_in_bits => BuilderData::with_raw(data, length_in_bits).unwrap().into_cell().unwrap().into()
+            length_in_bits => BuilderData::with_raw(data.into(), length_in_bits).unwrap().into_cell().unwrap().into()
         }
     }
 
     pub fn from_raw(data: Vec<u8>, length_in_bits: usize) -> SliceData {
-        BuilderData::with_raw(data, length_in_bits).unwrap().into_cell().unwrap().into()
+        BuilderData::with_raw(data.into(), length_in_bits).unwrap().into_cell().unwrap().into()
     }
 
     pub fn append_reference(&mut self, other: SliceData) -> &mut SliceData {
@@ -730,17 +731,17 @@ impl fmt::Display for SliceData {
 impl fmt::LowerHex for SliceData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let len = self.remaining_bits();
-        let mut data = self.get_bytestring(0);
+        let mut data: SmallVec<[u8; 128]> = self.get_bytestring(0).into();
         super::append_tag(&mut data, len);
-        write!(f, "{}", super::to_hex_string(&data, len, true))
+        write!(f, "{}", super::to_hex_string(data.as_slice(), len, true))
     }
 }
 
 impl fmt::UpperHex for SliceData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let len = self.remaining_bits();
-        let mut data = self.get_bytestring(0);
+        let mut data: SmallVec<[u8; 128]> = self.get_bytestring(0).into();
         super::append_tag(&mut data, len);
-        write!(f, "{}", super::to_hex_string(&data, len, false))
+        write!(f, "{}", super::to_hex_string(data.as_slice(), len, false))
     }
 }

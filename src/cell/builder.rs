@@ -14,6 +14,8 @@
 use std::convert::From;
 use std::fmt;
 
+use smallvec::SmallVec;
+
 use crate::{error, fail};
 use crate::cell::{append_tag, Cell, CellType, DataCell, find_tag, LevelMask, SliceData};
 use crate::types::{ExceptionCode, Result};
@@ -22,9 +24,9 @@ const EXACT_CAPACITY: usize = 128;
 
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub struct BuilderData {
-    data: Vec<u8>,
+    data: SmallVec<[u8; 128]>,
     length_in_bits: usize,
-    references: Vec<Cell>,
+    references: SmallVec<[Cell; 4]>,
     cell_type: CellType,
     level_mask: LevelMask,
 }
@@ -102,18 +104,18 @@ impl Default for BuilderData {
 }
 
 impl BuilderData {
-    pub const fn default() -> Self { Self::new() }
-    pub const fn new() -> Self {
+    pub  fn default() -> Self { Self::new() }
+    pub  fn new() -> Self {
         BuilderData {
-            data: Vec::new(),
+            data: SmallVec::new(),
             length_in_bits: 0,
-            references: vec![],
+            references:SmallVec::new(),
             cell_type: CellType::Ordinary,
             level_mask: LevelMask(0),
         }
     }
 
-    pub fn with_raw(mut data: Vec<u8>, length_in_bits: usize) -> Result<BuilderData> {
+    pub fn with_raw(mut data: SmallVec<[u8; 128]>, length_in_bits: usize) -> Result<BuilderData> {
         if length_in_bits > data.len() * 8 {
             fail!(ExceptionCode::FatalError)
         } else if length_in_bits > BuilderData::bits_capacity() {
@@ -132,13 +134,13 @@ impl BuilderData {
         Ok(BuilderData {
             data,
             length_in_bits,
-            references: vec![],
+            references: SmallVec::new(),
             cell_type: CellType::Ordinary,
             level_mask: LevelMask::with_mask(0),
         })
     }
 
-    pub fn with_raw_and_refs<TRefs>(data: Vec<u8>, length_in_bits: usize, refs: TRefs) -> Result<BuilderData>
+    pub fn with_raw_and_refs<TRefs>(data: SmallVec<[u8; 128]>, length_in_bits: usize, refs: TRefs) -> Result<BuilderData>
     where
         TRefs: IntoIterator<Item = Cell>
     {
@@ -158,7 +160,7 @@ impl BuilderData {
         } else if length_in_bits > BuilderData::bits_capacity() {
             fail!(ExceptionCode::CellOverflow)
         } else {
-            BuilderData::with_raw(data, length_in_bits)
+            BuilderData::with_raw(data.into(), length_in_bits)
         }
     }
 
@@ -214,7 +216,7 @@ impl BuilderData {
         let refs_count = slice.remaining_references();
         let references = (0..refs_count)
             .map(|i| slice.reference(i).unwrap())
-            .collect::<Vec<_>>();
+            .collect::<SmallVec<_>>();
         
         let mut builder = slice.remaining_data();
         builder.references = references;
@@ -225,7 +227,7 @@ impl BuilderData {
 
     pub fn update_cell<T, P, R>(&mut self, mutate: T, args: P) -> R
     where
-        T: Fn(&mut Vec<u8>, &mut usize, &mut Vec<Cell>, P)  -> R
+        T: Fn(&mut SmallVec<[u8; 128]>, &mut usize, &mut SmallVec<[Cell;4]>, P)  -> R
     {
         let result = mutate(&mut self.data, &mut self.length_in_bits, &mut self.references, args);
 
@@ -235,7 +237,7 @@ impl BuilderData {
     }
 
     /// returns data of cell
-    pub fn cell_data(&mut self, data: &mut Vec<u8>, bits: &mut usize, children: &mut Vec<Cell>) {
+    pub fn cell_data(&mut self, data: &mut SmallVec<[u8; 128]>, bits: &mut usize, children: &mut SmallVec<[Cell;4]>) {
         *data = self.data.clone();
         *bits = self.length_in_bits;
         children.clear();
@@ -255,7 +257,7 @@ impl BuilderData {
 
     pub fn prepend_raw(&mut self, slice: &[u8], bits: usize) -> Result<&mut Self> {
         if bits != 0 {
-            let mut buffer = BuilderData::with_raw(slice.to_vec(), bits)?;
+            let mut buffer = BuilderData::with_raw(SmallVec::from_slice(slice), bits)?;
             buffer.append_raw(self.data(), self.length_in_bits())?;
             self.length_in_bits = buffer.length_in_bits;
             self.data = buffer.data;
@@ -289,7 +291,7 @@ impl BuilderData {
         assert_eq!(self.length_in_bits() % 8, 0);
 
         self.data.truncate(self.length_in_bits / 8);
-        self.data.extend(slice);
+        self.data.extend(slice.into_iter().copied());
         self.length_in_bits += bits;
         self.data.truncate(self.length_in_bits / 8);
     }
@@ -299,7 +301,7 @@ impl BuilderData {
         assert_eq!(self.length_in_bits() % 8, 0);
 
         self.data.truncate(self.length_in_bits / 8);
-        self.data.extend(slice);
+        self.data.extend(slice.into_iter().copied());
         self.length_in_bits += bits;
         self.data.truncate(1 + self.length_in_bits / 8);
 
