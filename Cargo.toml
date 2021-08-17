@@ -35,6 +35,7 @@ rand = "0.7.3"
 sha2 = "0.9"
 anyhow = "1"
 thiserror = "1.0.26"
+smallvec = { version = "1.6.1", features = ["const_generics", "union", "write"] }
 
 [features]
 asm = ["sha2/asm"]

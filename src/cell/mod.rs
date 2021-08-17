@@ -524,7 +524,7 @@ pub fn append_tag(data: &mut Vec<u8>, bits: usize) {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CellData {
     cell_type: CellType,
-    data: Vec<u8>,
+    data: SmallVec<[u8;128]>,
     bit_length: u16,
     level_mask: LevelMask,
     store_hashes: bool,
@@ -533,10 +533,10 @@ pub struct CellData {
 }
 
 impl CellData {
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             cell_type: CellType::Ordinary,
-            data: vec![],
+            data: SmallVec::new(),
             bit_length: 0,
             level_mask: LevelMask(0),
             store_hashes: false,
@@ -549,7 +549,7 @@ impl CellData {
         assert!(bit_length <= MAX_DATA_BITS);
         Self {
             cell_type,
-            data,
+            data: SmallVec::from_vec(data),
             bit_length: bit_length as u16,
             level_mask: LevelMask::with_mask(level_mask),
             store_hashes,
@@ -562,7 +562,7 @@ impl CellData {
         self.cell_type
     }
 
-    pub fn data(&self) -> &Vec<u8> {
+    pub fn data(&self) -> &[u8] {
         &self.data
     }
 
@@ -738,16 +738,16 @@ impl CellData {
 #[derive(Clone, Debug)]
 pub struct DataCell {
     cell_data: CellData,
-    references: Vec<Cell>,
+    references: SmallVec<[Cell;4]>,
     tree_bits_count: u64,
     tree_cell_count: u64,
 }
 
 impl DataCell {
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             cell_data: CellData::new(),
-            references: vec![],
+            references: SmallVec::new(),
             tree_bits_count: 0,
             tree_cell_count: 1,
         }
@@ -763,7 +763,7 @@ impl DataCell {
         }
         let mut cell = DataCell {
             cell_data,
-            references,
+            references: SmallVec::from_vec(references),
             tree_bits_count,
             tree_cell_count,
         };
@@ -780,7 +780,7 @@ impl DataCell {
 
         let store_hashes = hashes.is_some();
         let cell_data = CellData::with_params(cell_type, data, level_mask, store_hashes, hashes, depths);
-        let mut references = Vec::new();
+        let mut references = SmallVec::new();
         let mut tree_bits_count = cell_data.bit_length as u64;
         let mut tree_cell_count = 1;
         for reference in refs.into_iter() {
@@ -1231,6 +1231,7 @@ mod builder_operations;
 
 pub use self::builder_operations::*;
 use std::io::{Write, Read, ErrorKind};
+use smallvec::SmallVec;
 
 pub(crate) fn to_hex_string(data: &[u8], len: usize, lower: bool) -> String {
     if len == 0 {
