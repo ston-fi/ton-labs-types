@@ -22,6 +22,7 @@ use crate::cell::{Cell, CellType, DataCell, LevelMask};
 use crate::types::ByteOrderRead;
 use crate::types::UInt256;
 use crate::{Result, fail};
+use smallvec::SmallVec;
 
 
 pub const SHA256_SIZE: usize = 32;
@@ -366,8 +367,8 @@ impl fmt::Display for BagOfCells {
 struct RawCell {
     pub cell_type: CellType,
     pub level: u8,
-    pub data: Vec<u8>,
-    pub refs: Vec<u32>,
+    pub data: SmallVec<[u8; 128]>,
+    pub refs: SmallVec<[u32; 4]>,
     pub hashes: Option<[UInt256; 4]>,
     pub depths: Option<[u16; 4]>,
 }
@@ -570,13 +571,13 @@ fn deserialize_cell<T>(
         //
         // For absent cells (i.e., external references), only d1 is present, always equal to 23 + 32l.
         let data_size = SHA256_SIZE * ((LevelMask::with_mask(level).level() + 1) as usize);
-        let mut cell_data = vec![0; data_size + 1];
+        let mut cell_data = [0; 128];
         src.read_exact(&mut cell_data[..data_size])?;
         cell_data[data_size] = 0x80;
 
         return Ok(RawCell { 
-            data: cell_data,
-            refs: Vec::new(),
+            data: SmallVec::from_slice(&cell_data[0..data_size + 1]),
+            refs: SmallVec::new(),
             level,
             cell_type: CellType::Ordinary,
             hashes: None,
@@ -617,7 +618,8 @@ fn deserialize_cell<T>(
         (None, None)
     };
 
-    let mut cell_data = vec![0; data_size + if no_completion_tag { 1 } else { 0 }];
+    let cell_size = data_size + if no_completion_tag { 1 } else { 0 };
+    let mut cell_data = [0; 128];
     src.read_exact(&mut cell_data[..data_size])?;
 
     // If complition tag was not serialized, we must add it (it is need for SliceData)
@@ -629,7 +631,7 @@ fn deserialize_cell<T>(
 
     //println!("{} l={} h={} s={} r={}", cell_type, level, hashes, exotic, refs);
 
-    let mut references = Vec::with_capacity(refs);
+    let mut references = SmallVec::with_capacity(refs);
     for _ in 0..refs {
         let i = src.read_be_uint(ref_size)?;
         if i > cells_count || i <= cell_index {
@@ -640,7 +642,7 @@ fn deserialize_cell<T>(
     }
 
     Ok(RawCell { 
-        data: cell_data,
+        data: SmallVec::from_slice(&cell_data[0..cell_size]),
         refs: references,
         level,
         cell_type,

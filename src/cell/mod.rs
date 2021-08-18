@@ -220,9 +220,9 @@ impl Cell {
         self.0.reference(index)
     }
 
-    pub fn clone_references(&self) -> Vec<Cell> {
+    pub fn clone_references(&self) -> SmallVec<[Cell;4]> {
         let count = self.0.references_count();
-        let mut refs = Vec::with_capacity(count);
+        let mut refs = SmallVec::with_capacity(count);
         for i in 0..count {
             refs.push(self.0.reference(i).unwrap())
         }
@@ -502,7 +502,7 @@ pub fn find_tag(bitsting: &[u8]) -> usize {
     length
 }
 
-pub fn append_tag(data: &mut Vec<u8>, bits: usize) {
+pub fn append_tag(data: &mut SmallVec<[u8; 128]>, bits: usize) {
     let shift = bits % 8;
     if shift == 0 || data.is_empty() {
         data.truncate(bits / 8);
@@ -544,12 +544,12 @@ impl CellData {
             depths: Some([0; 4]),
         }
     }
-    pub fn with_params(cell_type: CellType, data: Vec<u8>, level_mask: u8, store_hashes: bool, hashes: Option<[UInt256; 4]>, depths: Option<[u16; 4]>) -> Self {
-        let bit_length = find_tag(&data);
+    pub fn with_params(cell_type: CellType, data: SmallVec<[u8; 128]>, level_mask: u8, store_hashes: bool, hashes: Option<[UInt256; 4]>, depths: Option<[u16; 4]>) -> Self {
+        let bit_length = find_tag(data.as_ref());
         assert!(bit_length <= MAX_DATA_BITS);
         Self {
             cell_type,
-            data: SmallVec::from_vec(data),
+            data,
             bit_length: bit_length as u16,
             level_mask: LevelMask::with_mask(level_mask),
             store_hashes,
@@ -684,7 +684,7 @@ impl CellData {
             .ok_or_else(|| std::io::Error::from(ErrorKind::InvalidData))?;
         let bit_length = reader.read_le_u16()?;
         let data_len = ((bit_length + 8) / 8) as usize;
-        let mut data: Vec<u8> = vec![0; data_len];
+        let mut data = vec![0; data_len]; //todo optimize
         reader.read_exact(&mut data)?;
         let level_mask = reader.read_byte()?;
         let store_hashes = Self::read_bool(reader)?;
@@ -693,7 +693,7 @@ impl CellData {
         let depths = Self::read_short_array_opt(reader,
                                                 |reader| Ok(reader.read_le_u16()?))?;
 
-        Ok(Self::with_params(cell_type, data, level_mask, store_hashes, hashes, depths))
+        Ok(Self::with_params(cell_type, data.into(), level_mask, store_hashes, hashes, depths))
     }
 
     fn read_short_array_opt<R, T, F>(reader: &mut R, read_func: F) -> Result<Option<[T; 4]>>
@@ -753,7 +753,7 @@ impl DataCell {
         }
     }
 
-    pub fn with_max_depth(references: Vec<Cell>, data: Vec<u8>, cell_type: CellType, level_mask: u8, max_depth: u16) -> Result<DataCell> {
+    pub fn with_max_depth(references: SmallVec<[Cell; 4]>, data: SmallVec<[u8; 128]>, cell_type: CellType, level_mask: u8, max_depth: u16) -> Result<DataCell> {
         let cell_data = CellData::with_params(cell_type, data, level_mask, false, None, None);
         let mut tree_bits_count = cell_data.bit_length as u64;
         let mut tree_cell_count = 1;
@@ -763,7 +763,7 @@ impl DataCell {
         }
         let mut cell = DataCell {
             cell_data,
-            references: SmallVec::from_vec(references),
+            references,
             tree_bits_count,
             tree_cell_count,
         };
@@ -771,7 +771,7 @@ impl DataCell {
         Ok(cell)
     }
 
-    pub fn with_params<TRefs>(refs: TRefs, data: Vec<u8>, cell_type: CellType, level_mask: u8,
+    pub fn with_params<TRefs>(refs: TRefs, data: SmallVec<[u8;128]>, cell_type: CellType, level_mask: u8,
                               hashes: Option<[UInt256; 4]>, depths: Option<[u16; 4]>) -> Result<DataCell>
         where
             TRefs: IntoIterator<Item=Cell>

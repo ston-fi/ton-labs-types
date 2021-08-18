@@ -15,6 +15,7 @@ use crate::cell::{BuilderData, SliceData};
 use num::FromPrimitive;
 use sha2::Digest;
 use std::{cmp, convert::TryInto, fmt, fmt::{LowerHex, UpperHex}, str::{self, FromStr}};
+use smallvec::SmallVec;
 
 pub type Result<T> = anyhow::Result<T>;
 pub type Failure = Option<anyhow::Error>;
@@ -256,22 +257,19 @@ pub type AccountId = SliceData;
 
 impl From<[u8; 32]> for AccountId {
     fn from(data: [u8; 32]) -> AccountId {
-        let data = data.to_vec();
-        BuilderData::with_raw(data, 256).unwrap().into_cell().unwrap().into()
+        BuilderData::with_raw(SmallVec::from_slice(&data), 256).unwrap().into_cell().unwrap().into()
     }
 }
 
 impl From<UInt256> for AccountId {
     fn from(data: UInt256) -> AccountId {
-        let data = data.0.to_vec();
-        BuilderData::with_raw(data, 256).unwrap().into_cell().unwrap().into()
+        BuilderData::with_raw(SmallVec::from_slice(&data.0), 256).unwrap().into_cell().unwrap().into()
     }
 }
 
 impl From<&UInt256> for AccountId {
     fn from(data: &UInt256) -> AccountId {
-        let data = data.0.to_vec();
-        BuilderData::with_raw(data, 256).unwrap().into_cell().unwrap().into()
+        BuilderData::with_raw(SmallVec::from_slice(&data.0), 256).unwrap().into_cell().unwrap().into()
     }
 }
 
