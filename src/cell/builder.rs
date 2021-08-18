@@ -69,7 +69,7 @@ impl From<&mut BuilderData> for SliceData {
 
 impl From<&&Cell> for BuilderData {
     fn from(cell: &&Cell) -> Self {
-        let mut builder = BuilderData::with_bitstring(cell.data().to_vec()).unwrap();
+        let mut builder = BuilderData::with_bitstring(SmallVec::from_slice(cell.data())).unwrap();
         builder.references = cell.clone_references();
         builder.cell_type = cell.cell_type();
         builder.level_mask = cell.level_mask();
@@ -79,7 +79,7 @@ impl From<&&Cell> for BuilderData {
 
 impl From<&Cell> for BuilderData {
     fn from(cell: &Cell) -> Self {
-        let mut builder = BuilderData::with_bitstring(cell.data().to_vec()).unwrap();
+        let mut builder = BuilderData::with_bitstring(SmallVec::from_slice(cell.data())).unwrap();
         builder.references = cell.clone_references();
         builder.cell_type = cell.cell_type();
         builder.level_mask = cell.level_mask();
@@ -89,7 +89,7 @@ impl From<&Cell> for BuilderData {
 
 impl From<Cell> for BuilderData {
     fn from(cell: Cell) -> Self {
-        let mut builder = BuilderData::with_bitstring(cell.data().to_vec()).unwrap();
+        let mut builder = BuilderData::with_bitstring(SmallVec::from_slice(cell.data())).unwrap();
         builder.references = cell.clone_references();
         builder.cell_type = cell.cell_type();
         builder.level_mask = cell.level_mask();
@@ -151,7 +151,7 @@ impl BuilderData {
         Ok(builder)
     }
 
-    pub fn with_bitstring(data: Vec<u8>) -> Result<BuilderData> {
+    pub fn with_bitstring(data: SmallVec<[u8; 128]>) -> Result<BuilderData> {
         let length_in_bits = find_tag(data.as_slice());
         if length_in_bits == 0 {
             Ok(BuilderData::new())
@@ -160,7 +160,7 @@ impl BuilderData {
         } else if length_in_bits > BuilderData::bits_capacity() {
             fail!(ExceptionCode::CellOverflow)
         } else {
-            BuilderData::with_raw(data.into(), length_in_bits)
+            BuilderData::with_raw(data, length_in_bits)
         }
     }
 
