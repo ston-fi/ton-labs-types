@@ -149,7 +149,9 @@ impl LabelReader {
     fn get_label_same(&mut self, max: &mut usize, mut key: BuilderData) -> Result<BuilderData> {
         let value = if self.cursor.get_next_bit()? { 0xFF } else { 0 };
         let len = self.cursor.get_next_size(*max)? as usize;
-        key.append_raw(&vec![value; len / 8 + 1], len)?;
+        let mut data = SmallVec::<[u8; 128]>::with_capacity(128);
+        data.resize(len / 8 + 1, value);
+        key.append_raw(&data, len)?;
         *max = max.checked_sub(len).ok_or(ExceptionCode::CellUnderflow)?;
         Ok(key)
     }
@@ -268,8 +270,8 @@ impl SliceData {
 // methods working with root
 impl SliceData {
     pub fn is_empty_root(&self) -> bool {
-        self.is_empty() || 
-        matches!(self.get_bits(0, 1), Ok(0))
+        self.is_empty() ||
+            matches!(self.get_bits(0, 1), Ok(0))
     }
     pub fn get_dictionary(&mut self) -> Result<SliceData> {
         self.get_dictionary_opt().ok_or_else(|| error!(ExceptionCode::CellUnderflow))
@@ -669,8 +671,8 @@ pub trait HashmapType {
         Ok(())
     }
 
-    fn scan_diff<F>(&self, other: &Self, mut func: F) -> Result<bool> 
-    where F: FnMut(SliceData, Option<SliceData>, Option<SliceData>) -> Result<bool> {
+    fn scan_diff<F>(&self, other: &Self, mut func: F) -> Result<bool>
+        where F: FnMut(SliceData, Option<SliceData>, Option<SliceData>) -> Result<bool> {
         let bit_len = self.bit_len();
         if bit_len != other.bit_len() {
             fail!("Different bitlen")
@@ -782,7 +784,7 @@ fn scan_diff_leaf_reched<T, F>(
 ) -> Result<bool>
 where
     T: HashmapType + ?Sized,
-    F: FnMut(SliceData, Option<SliceData>, Option<SliceData>) -> Result<bool> {
+        F: FnMut(SliceData, Option<SliceData>, Option<SliceData>) -> Result<bool> {
     debug_assert!(bit_len_1 == 0 || bit_len_2 == 0, "should be called only if one leaf reached");
     if bit_len_1 == 0 && bit_len_2 == 0 { // 1 and 2 leaves reached
         if key1 == key2 {
@@ -801,8 +803,8 @@ where
             bit_len_2,
             &mut |key, cursor| if key1 != key {
                 func(key.into_cell()?.into(), None, Some(cursor))
-            } else { 
-                chk = true; 
+            } else {
+                chk = true;
                 match cursor == cursor_1 {
                     true => Ok(true),
                     false => func(key.into_cell()?.into(), Some(cursor_1.clone()), Some(cursor))
@@ -944,7 +946,7 @@ fn iterate_internal<T, F>(
 ) -> Result<bool>
 where
     F: FnMut(BuilderData, SliceData) -> Result<bool>,
-    T: HashmapType + ?Sized
+        T: HashmapType + ?Sized
 {
     if !cursor.already_read() {
         key = cursor.get_label_raw(&mut bit_len, key)?;
@@ -1085,7 +1087,7 @@ fn put_to_node_with_mode<T: HashmapType + ?Sized>(
                 let make_cell = match result {
                     Ok(None) => mode.bit(ADD),
                     Ok(Some(_)) => mode.bit(REPLACE),
-                    _ => false                    
+                    _ => false
                 };
                 if make_cell {
                     *cell = gas_consumer.finalize_cell(
@@ -1194,7 +1196,7 @@ pub trait HashmapRemover: HashmapType {
         self.hashmap_remove(key, &mut 0)
     }
     fn hashmap_filter<F>(&mut self, mut func: F) -> Result<()>
-    where F: FnMut(&BuilderData, SliceData) -> Result<HashmapFilterResult> {
+        where F: FnMut(&BuilderData, SliceData) -> Result<HashmapFilterResult> {
         let bit_len = self.bit_len();
         let mut result = HashmapFilterResult::Accept;
         filter_next::<Self, _>(self.data_mut(), &mut BuilderData::default(), bit_len, &mut result, &mut func)?;
@@ -1209,8 +1211,8 @@ fn filter_next<T, F>(
     result: &mut HashmapFilterResult,
     func: &mut F,
 ) -> Result<(bool, Option<SliceData>)> // is_removed and remainder
-where
-    T: HashmapType + ?Sized,
+    where
+        T: HashmapType + ?Sized,
     F: FnMut(&BuilderData, SliceData) -> Result<HashmapFilterResult>
 {
     if *result == HashmapFilterResult::Cancel || *result == HashmapFilterResult::Stop {
@@ -1307,7 +1309,7 @@ pub trait HashmapSubtree: HashmapType {
         }
         Ok(())
     }
-    
+
     /// transform to subtree without the common prefix (dec bit_len)
     fn into_subtree_without_prefix(&mut self, prefix: &SliceData, gas_consumer: &mut dyn GasConsumer) -> Result<()> {
         let prefix_len = prefix.remaining_bits();
@@ -1355,8 +1357,8 @@ pub trait HashmapSubtree: HashmapType {
 }
 
 fn down_by_tree<T>(prefix: &SliceData, cursor: &mut LabelReader, mut bit_len: usize, gas_consumer: &mut dyn GasConsumer)
--> Result<(BuilderData, Option<SliceData>)>
-where T: HashmapType + ?Sized {
+                   -> Result<(BuilderData, Option<SliceData>)>
+    where T: HashmapType + ?Sized {
     let mut key = BuilderData::default();
     loop {
         key = cursor.get_label_raw(&mut bit_len, key)?;

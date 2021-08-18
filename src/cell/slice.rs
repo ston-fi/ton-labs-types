@@ -206,7 +206,7 @@ impl SliceData {
     }
 
     /// shrinks references_window: range - subrange of current window, returns shrinked references
-    pub fn shrink_references<T: RangeBounds<usize>>(&mut self, range: T) -> Vec<Cell> {
+    pub fn shrink_references<T: RangeBounds<usize>>(&mut self, range: T) -> SmallVec<[Cell; 4]> {
         let refs_count = self.remaining_references();
         let start = match range.start_bound() {
             Bound::Included(start) => *start,
@@ -219,7 +219,7 @@ impl SliceData {
             Bound::Unbounded => refs_count
         };
 
-        let mut vec = vec![];
+        let mut vec = SmallVec::new();
         if (start <= end) && (end <= refs_count) {
             (0..start).for_each(|i| vec.push(self.reference(i).unwrap()));
             (end..refs_count).for_each(|i| vec.push(self.reference(i).unwrap()));
@@ -242,11 +242,11 @@ impl SliceData {
                 self.remaining_bits()
             ).unwrap()
         } else if trailing + self.remaining_bits() <= 8 {
-            let vec = vec![self.cell.data()[start] << trailing];
+            let vec = smallvec::smallvec![self.cell.data()[start] << trailing];
             BuilderData::with_raw(vec.into(), self.remaining_bits()).unwrap()
         } else {
-            let vec = vec![self.cell.data()[start] << trailing];
-            let mut builder = BuilderData::with_raw(vec.into(), 8 - trailing).unwrap();
+            let vec = smallvec::smallvec![self.cell.data()[start] << trailing];
+            let mut builder = BuilderData::with_raw(vec, 8 - trailing).unwrap();
             builder.append_raw(& self.cell.data()[start + 1..=end], trailing + self.remaining_bits() - 8).unwrap();
             builder
         }
@@ -662,12 +662,12 @@ impl SliceData {
     }
 
     /// Returns cell's hashes (representation and highers)
-    pub fn hashes(&self) -> Vec<UInt256> {
+    pub fn hashes(&self) -> SmallVec<[UInt256; 4]> {
         self.cell.hashes()
     }
 
     /// Returns cell's depth (for current state and each level)
-    pub fn depths(&self) -> Vec<u16> {
+    pub fn depths(&self) -> SmallVec<[u16; 4]> {
         self.cell.depths()
     }
 

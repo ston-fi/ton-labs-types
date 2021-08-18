@@ -288,8 +288,8 @@ impl Cell {
     }
 
     /// Returns cell's hashes (representation and highers)
-    pub fn hashes(&self) -> Vec<UInt256> {
-        let mut hashes = Vec::new();
+    pub fn hashes(&self) -> SmallVec<[UInt256; 4]> {
+        let mut hashes = SmallVec::new();
         for i in 0..self.level() + 1 {
             hashes.push(self.hash(i as usize))
         }
@@ -297,8 +297,8 @@ impl Cell {
     }
 
     /// Returns cell's depth (for current state and each level)
-    pub fn depths(&self) -> Vec<u16> {
-        let mut depths = Vec::new();
+    pub fn depths(&self) -> SmallVec<[u16; 4]> {
+        let mut depths = SmallVec::new();
         for i in 0..self.level() + 1 {
             depths.push(self.depth(i as usize))
         }
@@ -677,14 +677,15 @@ impl CellData {
         }
         Ok(())
     }
-
+    
     /// Binary deserialization of cell data
     pub fn deserialize<T: Read>(reader: &mut T) -> Result<Self> {
         let cell_type: CellType = FromPrimitive::from_u8(reader.read_byte()?)
             .ok_or_else(|| std::io::Error::from(ErrorKind::InvalidData))?;
         let bit_length = reader.read_le_u16()?;
         let data_len = ((bit_length + 8) / 8) as usize;
-        let mut data = vec![0; data_len]; //todo optimize
+        let mut data = SmallVec::with_capacity(128);
+        data.resize(data_len, 0);
         reader.read_exact(&mut data)?;
         let level_mask = reader.read_byte()?;
         let store_hashes = Self::read_bool(reader)?;
@@ -693,7 +694,7 @@ impl CellData {
         let depths = Self::read_short_array_opt(reader,
                                                 |reader| Ok(reader.read_le_u16()?))?;
 
-        Ok(Self::with_params(cell_type, data.into(), level_mask, store_hashes, hashes, depths))
+        Ok(Self::with_params(cell_type, data, level_mask, store_hashes, hashes, depths))
     }
 
     fn read_short_array_opt<R, T, F>(reader: &mut R, read_func: F) -> Result<Option<[T; 4]>>
