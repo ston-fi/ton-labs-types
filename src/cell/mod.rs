@@ -677,7 +677,7 @@ impl CellData {
         }
         Ok(())
     }
-    
+
     /// Binary deserialization of cell data
     pub fn deserialize<T: Read>(reader: &mut T) -> Result<Self> {
         let cell_type: CellType = FromPrimitive::from_u8(reader.read_byte()?)

@@ -23,7 +23,7 @@ use crate::types::ByteOrderRead;
 use crate::types::UInt256;
 use crate::{Result, fail};
 use smallvec::SmallVec;
-
+use smallvec::smallvec;
 
 pub const SHA256_SIZE: usize = 32;
 pub const DEPTH_SIZE: usize = 2;
@@ -63,7 +63,7 @@ impl BagOfCells {
     }
     
     pub fn with_roots_and_absent(root_cells: Vec<&Cell>, absent_cells: Vec<&Cell>) -> Self {
-        let mut	cells = HashMap::<UInt256, Cell>::new();
+        let mut	cells = HashMap::<UInt256, Cell>::with_capacity(root_cells.len());
         let mut sorted_rev = Vec::<UInt256>::new();
         let mut absent_cells_hashes = HashSet::<UInt256>::new();
 
@@ -232,7 +232,7 @@ impl BagOfCells {
         }
 
         // Cells
-        let mut hashes_to_indexes = HashMap::<&UInt256, u32>::new();
+        let mut hashes_to_indexes = HashMap::<&UInt256, u32>::with_capacity(self.sorted_rev.len());
         for (index, cell_hash) in self.sorted_rev.iter().rev().enumerate() {
             hashes_to_indexes.insert(cell_hash, index as u32);
         }
@@ -476,10 +476,10 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
 
 
     // Index processing - extract cell's sizes to check and correct future deserialization 
-    let mut cells_sizes = vec![0_usize; cells_count];
+    let mut cells_sizes: SmallVec<[usize; 256]> = smallvec![0_usize; cells_count];
     let mut prev_offset = 0;
     if index_included {
-        let mut raw_index = vec![0; cells_count * offset_size];
+        let mut raw_index:SmallVec<[_; 256]> = smallvec![0; cells_count * offset_size];
         src.read_exact(&mut raw_index)?;
 
         for i in 0_usize..cells_count {
@@ -497,7 +497,7 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
         }
     }
     
-    let mut raw_cells = HashMap::new();
+    let mut raw_cells = HashMap::with_capacity(cells_count);
 
     // Deserialize cells
     for cell_index in 0..cells_count {
@@ -509,7 +509,7 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
     }
 
     // Resolving references & constructing cells from leaves to roots
-    let mut done_cells = HashMap::<u32, Cell>::new();
+    let mut done_cells = HashMap::<u32, Cell>::with_capacity(cells_count);
     for cell_index in (0..cells_count).rev() {
         let raw_cell = raw_cells.remove(&cell_index).unwrap();
         let mut refs = vec!();
@@ -571,12 +571,12 @@ fn deserialize_cell<T>(
         //
         // For absent cells (i.e., external references), only d1 is present, always equal to 23 + 32l.
         let data_size = SHA256_SIZE * ((LevelMask::with_mask(level).level() + 1) as usize);
-        let mut cell_data = [0; 128];
-        src.read_exact(&mut cell_data[..data_size])?;
+        let mut cell_data = smallvec![0; data_size + 1];
+        src.read_exact(&mut cell_data)?;
         cell_data[data_size] = 0x80;
 
         return Ok(RawCell { 
-            data: SmallVec::from_slice(&cell_data[0..data_size + 1]),
+            data:cell_data,
             refs: SmallVec::new(),
             level,
             cell_type: CellType::Ordinary,
