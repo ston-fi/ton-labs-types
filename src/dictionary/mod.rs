@@ -13,6 +13,8 @@
 
 use std::{cmp, iter::Iterator, marker::PhantomData};
 
+use smallvec::SmallVec;
+
 use crate::{error, fail};
 use crate::cell::{BuilderData, Cell, IBitstring, SliceData};
 use crate::GasConsumer;
@@ -21,7 +23,6 @@ use crate::types::{ExceptionCode, Result};
 
 pub use self::hashmap::HashmapE;
 pub use self::pfxhashmap::PfxHashmapE;
-use smallvec::SmallVec;
 
 mod hashmap;
 mod pfxhashmap;
@@ -149,9 +150,7 @@ impl LabelReader {
     fn get_label_same(&mut self, max: &mut usize, mut key: BuilderData) -> Result<BuilderData> {
         let value = if self.cursor.get_next_bit()? { 0xFF } else { 0 };
         let len = self.cursor.get_next_size(*max)? as usize;
-        let mut data = SmallVec::<[u8; 128]>::with_capacity(128);
-        data.resize(len / 8 + 1, value);
-        key.append_raw(&data, len)?;
+        key.append_raw(&SmallVec::<[u8; 128]>::from_elem(value, len / 8 + 1), len)?;
         *max = max.checked_sub(len).ok_or(ExceptionCode::CellUnderflow)?;
         Ok(key)
     }

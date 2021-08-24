@@ -16,7 +16,7 @@ use std::fmt;
 
 use smallvec::SmallVec;
 
-use crate::{error, fail};
+use crate::fail;
 use crate::cell::{append_tag, Cell, CellType, DataCell, find_tag, LevelMask, SliceData};
 use crate::types::{ExceptionCode, Result};
 
@@ -291,7 +291,7 @@ impl BuilderData {
         assert_eq!(self.length_in_bits() % 8, 0);
 
         self.data.truncate(self.length_in_bits / 8);
-        self.data.extend(slice.into_iter().copied());
+        self.data.extend_from_slice(slice);
         self.length_in_bits += bits;
         self.data.truncate(self.length_in_bits / 8);
     }
@@ -301,7 +301,7 @@ impl BuilderData {
         assert_eq!(self.length_in_bits() % 8, 0);
 
         self.data.truncate(self.length_in_bits / 8);
-        self.data.extend(slice.into_iter().copied());
+        self.data.extend_from_slice(slice);
         self.length_in_bits += bits;
         self.data.truncate(1 + self.length_in_bits / 8);
 

@@ -17,13 +17,12 @@ use std::fmt;
 use std::io::{Read, Write};
 
 use crc::{crc32, Hasher32};
+use smallvec::{smallvec, SmallVec};
 
 use crate::cell::{Cell, CellType, DataCell, LevelMask};
 use crate::types::ByteOrderRead;
 use crate::types::UInt256;
 use crate::{Result, fail};
-use smallvec::SmallVec;
-use smallvec::smallvec;
 
 pub const SHA256_SIZE: usize = 32;
 pub const DEPTH_SIZE: usize = 2;
@@ -572,7 +571,7 @@ fn deserialize_cell<T>(
         // For absent cells (i.e., external references), only d1 is present, always equal to 23 + 32l.
         let data_size = SHA256_SIZE * ((LevelMask::with_mask(level).level() + 1) as usize);
         let mut cell_data = smallvec![0; data_size + 1];
-        src.read_exact(&mut cell_data)?;
+        src.read_exact(&mut cell_data[..data_size])?;
         cell_data[data_size] = 0x80;
 
         return Ok(RawCell { 
@@ -618,8 +617,7 @@ fn deserialize_cell<T>(
         (None, None)
     };
 
-    let cell_size = data_size + if no_completion_tag { 1 } else { 0 };
-    let mut cell_data = [0; 128];
+    let mut cell_data = smallvec![0; data_size + if no_completion_tag { 1 } else { 0 }];
     src.read_exact(&mut cell_data[..data_size])?;
 
     // If complition tag was not serialized, we must add it (it is need for SliceData)
@@ -642,7 +640,7 @@ fn deserialize_cell<T>(
     }
 
     Ok(RawCell { 
-        data: SmallVec::from_slice(&cell_data[0..cell_size]),
+        data: cell_data,
         refs: references,
         level,
         cell_type,

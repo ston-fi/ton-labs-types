@@ -20,6 +20,7 @@ use std::ops::{BitOr, BitOrAssign, Deref};
 use sha2::{Sha256, Digest};
 use std::cmp::{max, min};
 use num::{FromPrimitive, ToPrimitive};
+use smallvec::{smallvec, SmallVec};
 
 pub const MAX_REFERENCES_COUNT: usize = 4;
 pub const MAX_DATA_BITS: usize = 1023;
@@ -502,7 +503,7 @@ pub fn find_tag(bitsting: &[u8]) -> usize {
     length
 }
 
-pub fn append_tag(data: &mut SmallVec<[u8; 128]>, bits: usize) {
+pub fn append_tag<const N: usize>(data: &mut SmallVec<[u8; N]>, bits: usize) {
     let shift = bits % 8;
     if shift == 0 || data.is_empty() {
         data.truncate(bits / 8);
@@ -524,7 +525,7 @@ pub fn append_tag(data: &mut SmallVec<[u8; 128]>, bits: usize) {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CellData {
     cell_type: CellType,
-    data: SmallVec<[u8;128]>,
+    data: SmallVec<[u8; 128]>,
     bit_length: u16,
     level_mask: LevelMask,
     store_hashes: bool,
@@ -684,8 +685,7 @@ impl CellData {
             .ok_or_else(|| std::io::Error::from(ErrorKind::InvalidData))?;
         let bit_length = reader.read_le_u16()?;
         let data_len = ((bit_length + 8) / 8) as usize;
-        let mut data = SmallVec::with_capacity(128);
-        data.resize(data_len, 0);
+        let mut data = smallvec![0; data_len];
         reader.read_exact(&mut data)?;
         let level_mask = reader.read_byte()?;
         let store_hashes = Self::read_bool(reader)?;
@@ -1232,7 +1232,6 @@ mod builder_operations;
 
 pub use self::builder_operations::*;
 use std::io::{Write, Read, ErrorKind};
-use smallvec::SmallVec;
 
 pub(crate) fn to_hex_string(data: &[u8], len: usize, lower: bool) -> String {
     if len == 0 {

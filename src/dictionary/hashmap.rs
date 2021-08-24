@@ -14,7 +14,7 @@
 use std::fmt;
 
 use crate::{
-    error, fail, Result, GasConsumer,
+    fail, Result, GasConsumer,
     types::ExceptionCode,
     cell::{BuilderData, Cell, SliceData},
 
