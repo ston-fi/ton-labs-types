@@ -57,7 +57,7 @@ pub struct UInt256([u8; 32]);
 impl PartialEq<SliceData> for UInt256 {
     fn eq(&self, other: &SliceData) -> bool {
         if other.remaining_bits() == 256 {
-            return self.0 == other.get_bytestring(0).as_slice()
+            return self.0 == other.get_bytestring_on_stack(0).as_slice()
         }
         false
     }
@@ -66,7 +66,7 @@ impl PartialEq<SliceData> for UInt256 {
 impl PartialEq<SliceData> for &UInt256 {
     fn eq(&self, other: &SliceData) -> bool {
         if other.remaining_bits() == 256 {
-            return self.0 == other.get_bytestring(0).as_slice()
+            return self.0 == other.get_bytestring_on_stack(0).as_slice()
         }
         false
     }

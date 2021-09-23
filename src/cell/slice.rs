@@ -41,8 +41,8 @@ impl Ord for SliceData {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         match self.remaining_bits().cmp(&other.remaining_bits()) {
             cmp::Ordering::Equal => {
-                let vec1 = self.get_bytestring(0);
-                let vec2 = other.get_bytestring(0);
+                let vec1 = self.get_bytestring_on_stack(0);
+                let vec2 = other.get_bytestring_on_stack(0);
                 let len = vec1.len();
                 for i in 0..len {
                     let ordering = vec1[i].cmp(&vec2[i]);
@@ -59,7 +59,7 @@ impl Ord for SliceData {
 
 impl Hash for SliceData {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.get_bytestring(0).hash(state);
+        self.get_bytestring_on_stack(0).hash(state);
         for i in self.references_window.clone() {
             state.write(self.cell.reference(i).unwrap().repr_hash().as_slice());
         }
@@ -69,7 +69,7 @@ impl PartialEq for SliceData {
     fn eq(&self, slice: &SliceData) -> bool {
         let refs_count = self.remaining_references();
         let bit_len = self.remaining_bits();
-        if (bit_len != slice.remaining_bits()) || 
+        if (bit_len != slice.remaining_bits()) ||
            (refs_count != slice.remaining_references()) {
             return false;
         }
@@ -88,7 +88,7 @@ impl PartialEq for SliceData {
             let ref2 = slice.reference(i).unwrap();
             if ref1 != ref2 {
                 return false;
-            } 
+            }
         }
         true
     }
@@ -243,7 +243,7 @@ impl SliceData {
             ).unwrap()
         } else if trailing + self.remaining_bits() <= 8 {
             let vec = smallvec::smallvec![self.cell.data()[start] << trailing];
-            BuilderData::with_raw(vec.into(), self.remaining_bits()).unwrap()
+            BuilderData::with_raw(vec, self.remaining_bits()).unwrap()
         } else {
             let vec = smallvec::smallvec![self.cell.data()[start] << trailing];
             let mut builder = BuilderData::with_raw(vec, 8 - trailing).unwrap();
@@ -409,9 +409,9 @@ impl SliceData {
         if bits == 0 {
             BigInt::from(0)
         } else if bits < length_in_bits {
-            BigInt::from_bytes_be(Sign::Plus, &self.get_bytestring(0)) << (length_in_bits - bits)
+            BigInt::from_bytes_be(Sign::Plus, &self.get_bytestring_on_stack(0)) << (length_in_bits - bits)
         } else {
-            BigInt::from_bytes_be(Sign::Plus, &self.get_bytestring(0)[..32])
+            BigInt::from_bytes_be(Sign::Plus, &self.get_bytestring_on_stack(0)[..32])
         }
     }
 
@@ -516,6 +516,24 @@ impl SliceData {
 
     pub fn get_bytestring(&self, mut offset: usize) -> Vec<u8> {
         let mut ret = Vec::new();
+        while (self.data_window.start + offset + 8) <= self.data_window.end {
+            ret.push(self.get_byte(offset).unwrap());
+            offset += 8
+        }
+        if (self.data_window.start + offset) < self.data_window.end {
+            let remainder = self.data_window.end - self.data_window.start - offset;
+            ret.push(self.get_bits(offset, remainder).unwrap() << (8 - remainder));
+        }
+        ret
+    }
+
+    pub fn hash_bytestring<H: Hasher>(&self, offset: usize, hasher: &mut H) {
+        let data = self.get_bytestring_on_stack(offset);
+        hasher.write(&data);
+    }
+
+    pub fn get_bytestring_on_stack(&self, mut offset: usize) -> SmallVec<[u8; 128]> {
+        let mut ret = SmallVec::<[u8; 128]>::new();
         while (self.data_window.start + offset + 8) <= self.data_window.end {
             ret.push(self.get_byte(offset).unwrap());
             offset += 8
@@ -676,7 +694,7 @@ impl SliceData {
     }
 
     pub fn is_full_cell_slice(&self) -> bool {
-        self.data_window.start == 0 && 
+        self.data_window.start == 0 &&
         self.data_window.end == self.cell.bit_length() &&
         self.remaining_references() == self.cell.references_count()
     }
@@ -723,7 +741,7 @@ impl fmt::Display for SliceData {
                 self.data_window.end,
                 self.references_window.start,
                 self.references_window.end,
-                hex::encode(&self.get_bytestring(0)),
+                hex::encode(&self.get_bytestring_on_stack(0)),
                 self.cell)
     }
 }
@@ -731,7 +749,7 @@ impl fmt::Display for SliceData {
 impl fmt::LowerHex for SliceData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let len = self.remaining_bits();
-        let mut data: SmallVec<[u8; 128]> = self.get_bytestring(0).into();
+        let mut data = self.get_bytestring_on_stack(0);
         super::append_tag(&mut data, len);
         write!(f, "{}", super::to_hex_string(data.as_slice(), len, true))
     }
@@ -740,7 +758,7 @@ impl fmt::LowerHex for SliceData {
 impl fmt::UpperHex for SliceData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let len = self.remaining_bits();
-        let mut data: SmallVec<[u8; 128]> = self.get_bytestring(0).into();
+        let mut data = self.get_bytestring_on_stack(0);
         super::append_tag(&mut data, len);
         write!(f, "{}", super::to_hex_string(data.as_slice(), len, false))
     }

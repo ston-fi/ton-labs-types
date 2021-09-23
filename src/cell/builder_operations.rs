@@ -71,7 +71,7 @@ impl BuilderData {
         if self.bits_free() < other.remaining_bits() || self.references_free() < other.remaining_references() {
             fail!(ExceptionCode::CellOverflow)
         }
-        self.append_raw(other.get_bytestring(0).as_slice(), other.remaining_bits())?;
+        self.append_raw(other.get_bytestring_on_stack(0).as_slice(), other.remaining_bits())?;
         for i in 0..other.remaining_references() {
             self.append_reference_cell(other.reference(i)?);
         }
@@ -125,7 +125,7 @@ impl IBitstring for BuilderData {
         self.append_raw(data, length_in_bits)
     }
     fn append_bytestring(&mut self, data: &SliceData) -> Result<&mut Self> {
-        self.append_raw(&data.get_bytestring(0), data.remaining_bits())
+        self.append_raw(&data.get_bytestring_on_stack(0), data.remaining_bits())
     }
     fn append_bit_zero(&mut self) -> Result<&mut Self> {
         self.append_raw(&[0x00], 1)
