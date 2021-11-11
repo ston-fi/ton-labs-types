@@ -220,7 +220,7 @@ impl fmt::Display for UInt256 {
             f,
             "UInt256[{:X?}]", self.as_slice()
         )
-    }    
+    }
 }
 
 impl LowerHex for UInt256 {
@@ -351,7 +351,7 @@ impl ExceptionCode {
 }
 
 pub trait ByteOrderRead {
-    fn read_be_uint(&mut self, bytes: usize) -> std::io::Result<usize>;
+    fn read_be_uint(&mut self, bytes: usize) -> std::io::Result<u64>;
     fn read_byte(&mut self) -> std::io::Result<u8>;
     fn read_be_u16(&mut self) -> std::io::Result<u16>;
     fn read_be_u32(&mut self) -> std::io::Result<u32>;
@@ -363,46 +363,54 @@ pub trait ByteOrderRead {
 }
 
 impl<T: std::io::Read> ByteOrderRead for T {
-    fn read_be_uint(&mut self, bytes: usize) -> std::io::Result<usize> {
+    fn read_be_uint(&mut self, bytes: usize) -> std::io::Result<u64> {
         match bytes {
             1 => {
                 let mut buf = [0];
                 self.read_exact(&mut buf)?;
-                Ok(buf[0] as usize)
+                Ok(buf[0] as u64)
             }
             2 => {
                 let mut buf = [0; 2];
                 self.read_exact(&mut buf)?;
-                Ok(u16::from_be_bytes(buf) as usize)
+                Ok(u16::from_be_bytes(buf) as u64)
             }
             3..=4 => {
                 let mut buf = [0; 4];
                 self.read_exact(&mut buf[4 - bytes..])?;
-                Ok(u32::from_be_bytes(buf) as usize)
+                Ok(u32::from_be_bytes(buf) as u64)
             },
             5..=8 => {
                 let mut buf = [0; 8];
                 self.read_exact(&mut buf[8 - bytes..])?;
-                Ok(u64::from_be_bytes(buf) as usize)
+                Ok(u64::from_be_bytes(buf) as u64)
             },
             _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "too many bytes to read in usize")),
         }
     }
 
     fn read_byte(&mut self) -> std::io::Result<u8> {
-        self.read_be_uint(1).map(|value| value as u8)
+        let mut buf = [0];
+        self.read_exact(&mut buf)?;
+        Ok(buf[0])
     }
 
     fn read_be_u16(&mut self) -> std::io::Result<u16> {
-        self.read_be_uint(2).map(|value| value as u16)
+        let mut buf = [0; 2];
+        self.read_exact(&mut buf)?;
+        Ok(u16::from_be_bytes(buf))
     }
 
     fn read_be_u32(&mut self) -> std::io::Result<u32> {
-        self.read_be_uint(4).map(|value| value as u32)
+        let mut buf = [0; 4];
+        self.read_exact(&mut buf)?;
+        Ok(u32::from_be_bytes(buf))
     }
 
     fn read_be_u64(&mut self) -> std::io::Result<u64> {
-        self.read_be_uint(8).map(|value| value as u64)
+        let mut buf = [0; 8];
+        self.read_exact(&mut buf)?;
+        Ok(u64::from_be_bytes(buf))
     }
 
     fn read_le_u16(&mut self) -> std::io::Result<u16> {

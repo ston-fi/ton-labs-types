@@ -49,11 +49,11 @@ fn hml_short(key: &SliceData) -> Option<BuilderData> {
     let mut label = BuilderData::with_raw(SmallVec::from_slice(&[SHORT_LABEL_PREFIX]), 1).ok()?;
     let length = key.remaining_bits();
     for _ in 0..length / 32 {
-        label.append_bits(std::u32::MAX as usize, 32).ok()?;
+        label.append_bits(u32::MAX as usize, 32).ok()?;
     }
     let remainder = length % 32;
     if remainder != 0 {
-        label.append_bits(std::u32::MAX as usize, remainder).ok()?;
+        label.append_bits(u32::MAX as usize, remainder).ok()?;
     }
     label.append_bit_zero().ok()?;
     label.append_bytestring(key).ok()?;
@@ -66,12 +66,11 @@ fn hml_same(key: &SliceData, len: usize) -> Option<BuilderData> {
     let mut one_bit_found = false;
     let bits = key.remaining_bits();
     for offset in 0..bits {
-        match key.get_bits(offset, 1).ok()? {
-            0 if one_bit_found => return None,
-            0 => zero_bit_found = true,
-            1 if zero_bit_found => return None,
-            1 => one_bit_found = true,
-            _ => return None
+        match key.get_bit_opt(offset)? {
+            false if one_bit_found => return None,
+            false => zero_bit_found = true,
+            true if zero_bit_found => return None,
+            true => one_bit_found = true,
         }
     }
 
@@ -269,8 +268,7 @@ impl SliceData {
 // methods working with root
 impl SliceData {
     pub fn is_empty_root(&self) -> bool {
-        self.is_empty() ||
-            matches!(self.get_bits(0, 1), Ok(0))
+        self.is_empty() || matches!(self.get_bit_opt(0), Some(false))
     }
     pub fn get_dictionary(&mut self) -> Result<SliceData> {
         self.get_dictionary_opt().ok_or_else(|| error!(ExceptionCode::CellUnderflow))
@@ -306,7 +304,7 @@ fn find_leaf<T: HashmapType + ?Sized>(
     match SliceData::common_prefix(&key, &label) {
         (_, None, Some(_)) => fail!(ExceptionCode::DictionaryError),
         (prefix_opt, Some(remainder), Some(_)) => { // hm_edge is sliced
-            let key_bit = remainder.get_bits(0, 1)? as usize;
+            let key_bit = remainder.get_bit(0)? as usize;
             let next = match signed_int && path.is_empty() && prefix_opt.is_none() {
                 false => next_index,
                 true => 1 - next_index,
@@ -607,7 +605,7 @@ pub trait HashmapType {
                 true  => return Ok((None, Some(data.clone()))),
             }
             // wrong hashmap tree
-            _ => fail!("split fail: root label: x{} and key: x{}", label.to_hex_string(), key.to_hex_string()),
+            _ => fail!("split fail: root label: x{:x} and key: x{:x}", label, key),
         };
         cursor = SliceData::from(left);
         let label = cursor.get_label(bit_len)?;
@@ -739,7 +737,7 @@ fn dict_combine_with<T: HashmapType + ?Sized>(
             let next_index = rem1.get_next_bit_int()?;
             *cell1 = if let Some(mut rem2) = rem2_opt { // simple slice of both trees and make new fork
                 rem2.get_next_bit_int()?; // == 1 - next_index
-                let prefix = prefix_opt.unwrap_or_default(); // 
+                let prefix = prefix_opt.unwrap_or_default(); //
                 let bit_len1 = bit_len - prefix.remaining_bits() - 1;
                 let left = T::make_cell_with_remainder(rem1, bit_len1, &cursor1)?.into_cell()?;
                 let right = T::make_cell_with_remainder(rem2, bit_len1, &cursor2)?.into_cell()?;
@@ -939,8 +937,8 @@ where
 /// iterate all elements with callback function
 fn iterate_internal<T, F>(
     mut cursor: LabelReader,
-    mut key: BuilderData, 
-    mut bit_len: usize, 
+    mut key: BuilderData,
+    mut bit_len: usize,
     found: &mut F
 ) -> Result<bool>
 where
@@ -1082,7 +1080,7 @@ fn put_to_node_with_mode<T: HashmapType + ?Sized>(
                     &mut slice,
                     bit_len.checked_sub(prefix.remaining_bits()).ok_or(ExceptionCode::CellUnderflow)?,
                     key_remainder, leaf, gas_consumer, mode
-                );                                        
+                );
                 let make_cell = match result {
                     Ok(None) => mode.bit(ADD),
                     Ok(Some(_)) => mode.bit(REPLACE),
@@ -1096,9 +1094,9 @@ fn put_to_node_with_mode<T: HashmapType + ?Sized>(
             }
             error @ (_, _, _) => {
                 log::error!(
-                    target: "tvm",  
+                    target: "tvm",
                     "If we hit this, there's certainly a bug. {:?}. \
-                     Passed: label: {}, key: {} ", 
+                     Passed: label: {}, key: {} ",
                     error, label, key
                 );
                 fail!(ExceptionCode::FatalError)
@@ -1284,9 +1282,15 @@ fn filter_next<T, F>(
     }
 }
 
-pub trait HashmapSubtree: HashmapType {
+pub trait HashmapSubtree: HashmapType + Sized {
     /// transform to subtree with the common prefix
+    // #[deprecated]
+    #[allow(clippy::wrong_self_convention)]
     fn into_subtree_with_prefix(&mut self, prefix: &SliceData, gas_consumer: &mut dyn GasConsumer) -> Result<()> {
+        self.subtree_with_prefix(prefix, gas_consumer)
+    }
+    /// transform to subtree with the common prefix
+    fn subtree_with_prefix(&mut self, prefix: &SliceData, gas_consumer: &mut dyn GasConsumer) -> Result<()> {
         let prefix_len = prefix.remaining_bits();
         if prefix_len == 0 || self.bit_len() < prefix_len {
             return Ok(())
@@ -1309,8 +1313,20 @@ pub trait HashmapSubtree: HashmapType {
         Ok(())
     }
 
+    /// transform to subtree with the common prefix
+    fn into_subtree_w_prefix(mut self, prefix: &SliceData, gas_consumer: &mut dyn GasConsumer) -> Result<Self> {
+        self.subtree_with_prefix(prefix, gas_consumer)?;
+        Ok(self)
+    }
+
     /// transform to subtree without the common prefix (dec bit_len)
-    fn into_subtree_without_prefix(&mut self, prefix: &SliceData, gas_consumer: &mut dyn GasConsumer) -> Result<()> {
+    // #[deprecated]
+    #[allow(clippy::wrong_self_convention)]
+    fn into_subtree_without_prefix(&mut self, prefix: &SliceData, gas_consumer: &mut dyn GasConsumer)-> Result<()> {
+        self.subtree_without_prefix(prefix, gas_consumer)
+    }
+    /// transform to subtree without the common prefix (dec bit_len)
+    fn subtree_without_prefix(&mut self, prefix: &SliceData, gas_consumer: &mut dyn GasConsumer)-> Result<()> {
         let prefix_len = prefix.remaining_bits();
         if prefix_len == 0 || self.bit_len() < prefix_len {
             return Ok(())
@@ -1333,25 +1349,31 @@ pub trait HashmapSubtree: HashmapType {
         Ok(())
     }
 
+    /// transform to subtree without the common prefix (dec bit_len)
+    fn into_subtree_wo_prefix(mut self, prefix: &SliceData, gas_consumer: &mut dyn GasConsumer)-> Result<Self> {
+        self.subtree_without_prefix(prefix, gas_consumer)?;
+        Ok(self)
+    }
+
     /// transform to subtree with the maximal common prefix
-    fn into_subtree_with_prefix_not_exact(&mut self, prefix: &SliceData, gas_consumer: &mut dyn GasConsumer) -> Result<()> {
+    fn into_subtree_with_prefix_not_exact(mut self, prefix: &SliceData, gas_consumer: &mut dyn GasConsumer) -> Result<Self> {
         let bit_len = self.bit_len();
         if bit_len <= prefix.remaining_bits() {
-            return Ok(())
+            return Ok(self)
         }
         if let Some(root) = self.data() {
             let mut cursor = LabelReader::new(gas_consumer.load_cell(root.clone())?);
             let (key, rem_prefix) = down_by_tree::<Self>(prefix, &mut cursor, self.bit_len(), gas_consumer)?;
             if rem_prefix.as_ref() == Some(prefix) {
                 *self.data_mut() = None;
-                return Ok(())
+                return Ok(self)
             }
             let mut remainder = cursor.remainder()?;
             let is_leaf = Self::is_leaf(&mut remainder);
             let root = Self::make_cell_with_label_and_data(key.into_cell()?.into(), self.bit_len(), is_leaf, &remainder)?;
             *self.data_mut() = Some(gas_consumer.finalize_cell(root)?);
         }
-        Ok(())
+        Ok(self)
     }
 }
 

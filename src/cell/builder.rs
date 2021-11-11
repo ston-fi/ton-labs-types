@@ -207,8 +207,8 @@ impl BuilderData {
         let (_prefix, rem1, rem2) = SliceData::common_prefix(&label1, &label2);
         // unwraps are safe because common_prefix returns None if slice is empty
         Ok((
-            rem1.map(|rem| rem.get_bits(0, 1).expect("check common_prefix function") as usize),
-            rem2.map(|rem| rem.get_bits(0, 1).expect("check common_prefix function") as usize)
+            rem1.map(|rem| rem.get_bit(0).expect("check common_prefix function") as usize),
+            rem2.map(|rem| rem.get_bit(0).expect("check common_prefix function") as usize)
         ))
     }
 
@@ -217,7 +217,7 @@ impl BuilderData {
         let references = (0..refs_count)
             .map(|i| slice.reference(i).unwrap())
             .collect::<SmallVec<_>>();
-        
+
         let mut builder = slice.remaining_data();
         builder.references = references;
         builder.cell_type = slice.cell_type();

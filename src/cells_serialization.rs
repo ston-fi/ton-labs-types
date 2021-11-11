@@ -56,11 +56,11 @@ impl BagOfCells {
     pub fn with_root(root_cell: &Cell) -> Self {
         Self::with_roots_and_absent(vec!(root_cell), Vec::new())
     }
-    
+
     pub fn with_roots(root_cells: Vec<&Cell>) -> Self {
         Self::with_roots_and_absent(root_cells, Vec::new())
     }
-    
+
     pub fn with_roots_and_absent(root_cells: Vec<&Cell>, absent_cells: Vec<&Cell>) -> Self {
         let mut	cells = HashMap::<UInt256, Cell>::with_capacity(root_cells.len());
         let mut sorted_rev = Vec::<UInt256>::new();
@@ -114,10 +114,10 @@ impl BagOfCells {
             } else {
                 panic!("Bag of cells is corrupted!");
             }
-        } 
+        }
         None
     }
-    
+
     pub fn write_to<T: Write>(&self, dest: &mut T, include_index: bool) -> Result<()> {
         self.write_to_ex(
             dest,
@@ -132,13 +132,13 @@ impl BagOfCells {
 
     pub fn write_to_ex<T: Write>(&self, dest: &mut T, mode: BocSerialiseMode,
         custom_ref_size: Option<usize>, custom_offset_size: Option<usize>) -> Result<()> {
-        
+
         let dest = &mut IoCrcFilter::new(dest);
 
-        let ref_size = if let Some(crs) = custom_ref_size { crs } 
+        let ref_size = if let Some(crs) = custom_ref_size { crs }
                         else { number_of_bytes_to_fit(self.cells.len()) };
         let total_cells_size = self.cells.iter().map(|(_, c)| self.cell_serialized_size(c, ref_size)).sum::<usize>();
-        let offset_size = if let Some(cos) = custom_offset_size { cos } 
+        let offset_size = if let Some(cos) = custom_offset_size { cos }
                             else { number_of_bytes_to_fit(total_cells_size) };
 
         assert!(ref_size <= 4);
@@ -173,15 +173,15 @@ impl BagOfCells {
 
         // TODO: CRC support
         if include_crc {
-        //	unimplemented!(); 
+        //	unimplemented!();
         }
-        // TODO: figre out what `include_cache_bits` is 
+        // TODO: figre out what `include_cache_bits` is
         if include_cache_bits {
-        //	unimplemented!(); 
+        //	unimplemented!();
         }
         // TODO: investigate `flags` values possible meaning
         if flags != 0 {
-        //	unimplemented!(); 
+        //	unimplemented!();
         }
 
         dest.write_all(&magic.to_be_bytes())?;
@@ -193,8 +193,8 @@ impl BagOfCells {
             },
             BocSerialiseMode::Generic {index, crc, cache_bits, flags} => {
                 let mut b = ref_size as u8; // size:(## 3) { size <= 4 }
-                if index { b |= 0b1000_0000; } // has_idx:(## 1) 
-                if crc { b |= 0b0100_0000; } // has_crc32c:(## 1) 
+                if index { b |= 0b1000_0000; } // has_idx:(## 1)
+                if crc { b |= 0b0100_0000; } // has_crc32c:(## 1)
                 if cache_bits { b |= 0b0010_0000; } // has_cache_bits:(## 1)
                 if flags != 0 { b |= flags << 3; }  // flags:(## 2) { flags = 0 }
                 dest.write_all(&[b])?;
@@ -207,24 +207,24 @@ impl BagOfCells {
         dest.write_all(&(self.absent_count as u64).to_be_bytes()[(8-ref_size)..8])?;
         dest.write_all(&(total_cells_size as u64).to_be_bytes()[(8-offset_size)..8])?;
 
-        // Root list 
+        // Root list
         if include_root_list {
-            // Write root's indexes 
+            // Write root's indexes
             for index in self.roots_indexes_rev.iter() {
                 dest.write_all(&((self.cells.len() - *index - 1) as u64).to_be_bytes()[(8-ref_size)..8])?;
             }
         }
 
         // Index
-        if include_index { 
+        if include_index {
             let mut total_size = 0;
             for cell_hash in self.sorted_rev.iter().rev() {
                 total_size += self.cell_serialized_size(&self.cells[cell_hash], ref_size);
-                let for_write = 
+                let for_write =
                     if !include_cache_bits { total_size }
                     else {
                         total_size << 1
-                        // TODO: figre out what `include_cache_bits` is 
+                        // TODO: figre out what `include_cache_bits` is
                     };
                 dest.write_all(&(for_write as u64).to_be_bytes()[(8-offset_size)..8])?;
             }
@@ -242,7 +242,7 @@ impl BagOfCells {
                     Self::serialize_absent_cell(cell, dest)?;
                 } else {
                     Self::serialize_ordinary_cell_data(cell, dest)?;
-                    
+
                     for i in 0..cell.references_count() {
                         let child = cell.reference(i).unwrap();
                         let child_index = hashes_to_indexes[&child.repr_hash()] as u64;
@@ -263,7 +263,7 @@ impl BagOfCells {
         Ok(())
     }
 
-    fn traverse(cell: &Cell, cells: &mut HashMap<UInt256, Cell>, sorted: &mut Vec<UInt256>, 
+    fn traverse(cell: &Cell, cells: &mut HashMap<UInt256, Cell>, sorted: &mut Vec<UInt256>,
         absent_cells: &HashSet<UInt256>) {
 
         let hash = cell.repr_hash();
@@ -281,7 +281,7 @@ impl BagOfCells {
     }
 
     fn serialize_absent_cell(cell: &Cell, write: &mut dyn Write) -> Result<()> {
-        
+
         // For absent cells (i.e., external references), only d1 is present, always equal to 23 + 32l.
         let l = cell.level();
         assert!(l == 0);
@@ -326,7 +326,7 @@ impl BagOfCells {
         data_bit_len: usize,
         refs: u8,
         level_mask: u8,
-        exotic: bool, 
+        exotic: bool,
         store_hashes: bool
     ) -> (u8, u8) {
         let h = if store_hashes { 1 } else { 0 };
@@ -398,11 +398,11 @@ pub fn deserialize_cells_tree<T>(src: &mut T) -> Result<Vec<Cell>> where T: Read
 
 pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerialiseMode, usize, usize)>
     where T: Read {
-        
+
     let mut src = IoCrcFilter::new(src);
     let magic = src.read_be_u32()?;
     let first_byte = src.read_byte()?;
-    
+
     let index_included;
     let mut has_crc = false;
     let mut has_cache_bits = false; // TODO What is it?
@@ -447,8 +447,8 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
         fail!("offset size has to be  less or equal 8, actual value: {}", offset_size)
     }
 
-    let cells_count = src.read_be_uint(ref_size)?; // cells:(##(size * 8))
-    let roots_count = src.read_be_uint(ref_size)?; // roots:(##(size * 8))
+    let cells_count = src.read_be_uint(ref_size)? as usize; // cells:(##(size * 8))
+    let roots_count = src.read_be_uint(ref_size)? as usize; // roots:(##(size * 8))
     let _absent_count = src.read_be_uint(ref_size)?; // absent:(##(size * 8)) { roots + absent <= cells }
 
     if (magic == BOC_INDEXED_TAG || magic == BOC_INDEXED_CRC32_TAG) && roots_count > 1 {
@@ -463,7 +463,7 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
     // Root list
 
     let roots_indexes = if magic == BOC_GENERIC_TAG {
-        // root_list:(roots * ##(size * 8)) 
+        // root_list:(roots * ##(size * 8))
         let mut roots_indexes = Vec::with_capacity(roots_count);
         for _ in 0..roots_count {
             roots_indexes.push(src.read_be_uint(ref_size)?); // cells:(##(size * 8))
@@ -474,7 +474,7 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
     };
 
 
-    // Index processing - extract cell's sizes to check and correct future deserialization 
+    // Index processing - extract cell's sizes to check and correct future deserialization
     let mut cells_sizes: SmallVec<[usize; 256]> = smallvec![0_usize; cells_count];
     let mut prev_offset = 0;
     if index_included {
@@ -487,7 +487,7 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
 
             if has_cache_bits {
                 offset >>= 1;
-            } 
+            }
             if prev_offset > offset {
                 fail!("cell[{}]'s offset is wrong", i)
             }
@@ -495,14 +495,14 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
             prev_offset = offset;
         }
     }
-    
+
     let mut raw_cells = HashMap::with_capacity(cells_count);
 
     // Deserialize cells
     for cell_index in 0..cells_count {
         raw_cells.insert(
             cell_index,
-            deserialize_cell(&mut src, ref_size, cell_index, cells_count, 
+            deserialize_cell(&mut src, ref_size, cell_index, cells_count,
                 if index_included { Some(cells_sizes[cell_index as usize]) } else { None })?
             );
     }
@@ -519,7 +519,7 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
                 fail!("unresolved reference")
             }
         }
-        let cell = DataCell::with_params(refs, raw_cell.data, raw_cell.cell_type, raw_cell.level, 
+        let cell = DataCell::with_params(refs, raw_cell.data, raw_cell.cell_type, raw_cell.level,
             raw_cell.hashes, raw_cell.depths)?;
 
         done_cells.insert(cell_index as u32, Cell::with_cell_impl(cell));
@@ -553,7 +553,7 @@ fn deserialize_cell<T>(
     src: &mut T,
     ref_size: usize,
     cell_index: usize,
-    cells_count: usize, 
+    cells_count: usize,
     cell_size_opt: Option<usize>
 ) -> Result<RawCell> where T: Read {
 
@@ -565,7 +565,7 @@ fn deserialize_cell<T>(
     let absent = refs == 7 && hashes;
 
     if absent {
-        // TODO ABSENT CELLS are NOT serialized right way. 
+        // TODO ABSENT CELLS are NOT serialized right way.
         // Need to rewrite as soon as right way will be known.
         //
         // For absent cells (i.e., external references), only d1 is present, always equal to 23 + 32l.
@@ -574,32 +574,32 @@ fn deserialize_cell<T>(
         src.read_exact(&mut cell_data[..data_size])?;
         cell_data[data_size] = 0x80;
 
-        return Ok(RawCell { 
+        return Ok(RawCell {
             data:cell_data,
             refs: SmallVec::new(),
             level,
             cell_type: CellType::Ordinary,
             hashes: None,
-            depths: None, 
+            depths: None,
         });
     }
-    
+
     if refs > 4 {
         fail!("refs count has to be less or equal 4, actual value: {}", refs)
     }
 
     let d2 = src.read_byte()?;
-    let data_size = ((d2 >> 1) + if d2 & 1 != 0 { 1 } else { 0 }) as usize;	
-    let no_completion_tag = d2 & 1 == 0;		
+    let data_size = ((d2 >> 1) + if d2 & 1 != 0 { 1 } else { 0 }) as usize;
+    let no_completion_tag = d2 & 1 == 0;
     let full_cell_size = ref_size * refs + 2 + data_size +
                             if hashes { (1 + level as usize) * (SHA256_SIZE + DEPTH_SIZE) } else { 0 };
-    
+
     if let Some(cell_size) = cell_size_opt {
         if full_cell_size != cell_size {
             fail!("cell sizes have to be same, expected: {}, real: {}", full_cell_size, cell_size)
         }
     }
-    
+
     let (hashes_opt, depths_opt) = if hashes {
         let mut hashes = [UInt256::default(); 4];
         let mut depths = [0; 4];
@@ -622,16 +622,16 @@ fn deserialize_cell<T>(
 
     // If complition tag was not serialized, we must add it (it is need for SliceData)
     if no_completion_tag {
-        cell_data[data_size] = 0x80; 
+        cell_data[data_size] = 0x80;
     }
-    
+
     let cell_type = if !exotic { CellType::Ordinary } else { CellType::from(cell_data[0]) };
 
     //println!("{} l={} h={} s={} r={}", cell_type, level, hashes, exotic, refs);
 
     let mut references = SmallVec::with_capacity(refs);
     for _ in 0..refs {
-        let i = src.read_be_uint(ref_size)?;
+        let i = src.read_be_uint(ref_size)? as usize;
         if i > cells_count || i <= cell_index {
             fail!("reference out of range, {} < (value: {}) <= {}", cells_count, i, cell_index)
         } else {
@@ -639,20 +639,20 @@ fn deserialize_cell<T>(
         }
     }
 
-    Ok(RawCell { 
+    Ok(RawCell {
         data: cell_data,
         refs: references,
         level,
         cell_type,
         hashes: hashes_opt,
-        depths: depths_opt, 
+        depths: depths_opt,
     })
 }
 
 fn number_of_bytes_to_fit(l: usize) -> usize {
     let mut n = 0;
     let mut l1 = l;
-    
+
     while l1 != 0 {
         l1 >>= 8;
         n += 1;
@@ -669,9 +669,9 @@ struct IoCrcFilter<'a, T> {
 
 impl<'a, T> IoCrcFilter<'a, T> {
     pub fn new(io_object: &'a mut T) -> Self {
-        IoCrcFilter{ 
+        IoCrcFilter{
             io_object,
-            hasher: crc32::Digest::new(crc32::CASTAGNOLI) 
+            hasher: crc32::Digest::new(crc32::CASTAGNOLI)
         }
     }
 

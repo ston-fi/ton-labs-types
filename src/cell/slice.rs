@@ -17,8 +17,6 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::{Bound, Range, RangeBounds};
 
-use num::{BigInt, bigint::Sign};
-
 use crate::{error, fail, cell::{BuilderData, Cell, CellType, IBitstring, LevelMask}, parse_slice_base};
 use crate::types::{ExceptionCode, Result, UInt256};
 use smallvec::SmallVec;
@@ -263,7 +261,7 @@ impl SliceData {
     /// trim zeros from right to first one
     pub fn trim_right(&mut self) {
         for offset in (0..self.remaining_bits()).rev() {
-            if self.get_bits(offset, 1).unwrap() == 1 {
+            if self.get_bit_opt(offset) == Some(true) {
                 self.data_window.end = self.data_window.start + offset;
                 break
             }
@@ -290,13 +288,13 @@ impl SliceData {
         &self.cell
     }
     /// constructs new cell trunking original regarding window settings
-    pub fn into_cell(&self) -> Cell {
+    pub fn into_cell(self) -> Cell {
         if self.references_window.start == 0 && self.data_window.start == 0
             && self.references_window.end == self.cell.references_count()
             && self.data_window.end == self.cell.bit_length() {
-            self.cell.clone()
+            self.cell
         } else {
-            BuilderData::from_slice(self).into_cell().expect("it must not fail because builder made from cell cut by slice")
+            BuilderData::from_slice(&self).into_cell().expect("it must not fail because builder made from cell cut by slice")
         }
     }
 
@@ -320,6 +318,21 @@ impl SliceData {
         if self.references_window.start > 0 {
             self.references_window.start -= 1;
         }
+    }
+
+    pub fn get_bit_opt(&self, offset: usize) -> Option<bool> {
+        if offset >= self.remaining_bits() {
+            None
+        } else {
+            let index = self.data_window.start + offset;
+            let q = index / 8;
+            let r = index % 8;
+            Some((self.cell.data()[q] >> (7 - r) & 1) != 0)
+        }
+    }
+
+    pub fn get_bit(&self, offset: usize) -> Result<bool> {
+        self.get_bit_opt(offset).ok_or_else(|| error!(ExceptionCode::CellUnderflow))
     }
 
     /// Returns subslice of current slice
@@ -379,9 +392,9 @@ impl SliceData {
     }
 
     pub fn get_next_bit(&mut self) -> Result<bool> {
-        let byte = self.get_bits(0, 1)?;
+        let bit = self.get_bit(0)?;
         self.move_by(1)?;
-        Ok((byte & 1) == 1)
+        Ok(bit)
     }
 
     pub fn get_next_bit_int(&mut self) -> Result<usize> {
@@ -389,30 +402,15 @@ impl SliceData {
     }
 
     pub fn get_next_bit_opt(&mut self) -> Option<usize> {
-        if self.remaining_bits() == 0 {
-            None
-        } else {
-            let byte = self.get_bits(0, 1).ok()?;
-            self.move_by(1).ok()?;
-            Some(byte as usize)
-        }
+        let bit = self.get_bit_opt(0)?;
+        self.move_by(1).ok()?;
+        Some(bit as usize)
     }
 
     pub fn get_next_byte(&mut self) -> Result<u8> {
         let value = self.get_byte(0)?;
         self.move_by(8)?;
         Ok(value)
-    }
-
-    pub fn get_bigint(&self, length_in_bits: usize) -> BigInt {
-        let bits = self.remaining_bits();
-        if bits == 0 {
-            BigInt::from(0)
-        } else if bits < length_in_bits {
-            BigInt::from_bytes_be(Sign::Plus, &self.get_bytestring_on_stack(0)) << (length_in_bits - bits)
-        } else {
-            BigInt::from_bytes_be(Sign::Plus, &self.get_bytestring_on_stack(0)[..32])
-        }
     }
 
     pub fn get_next_int(&mut self, bits: usize) -> Result<u64> {
@@ -689,8 +687,15 @@ impl SliceData {
         self.cell.depths()
     }
 
-    pub fn to_hex_string(&self) -> String {
-        format!("{:x}", self)
+    // #[deprecated]
+    #[allow(clippy::wrong_self_convention)]
+    pub fn to_hex_string(&self) -> String { self.as_hex_string() }
+
+    pub fn as_hex_string(&self) -> String {
+        let len = self.remaining_bits();
+        let mut data = self.get_bytestring_on_stack(0);
+        super::append_tag(&mut data, len);
+        super::to_hex_string(data.as_slice(), len, true)
     }
 
     pub fn is_full_cell_slice(&self) -> bool {
@@ -736,7 +741,7 @@ impl fmt::Debug for SliceData {
 #[rustfmt::skip]
 impl fmt::Display for SliceData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "data: {}..{}, references: {}..{}, data slice:{}, cell:{}", 
+        writeln!(f, "data: {}..{}, references: {}..{}, data slice:{}, cell:{}",
                 self.data_window.start,
                 self.data_window.end,
                 self.references_window.start,
