@@ -522,7 +522,7 @@ pub fn append_tag<const N: usize>(data: &mut SmallVec<[u8; N]>, bits: usize) {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct CellData {
     cell_type: CellType,
     data: SmallVec<[u8; 128]>,
@@ -533,8 +533,26 @@ pub struct CellData {
     depths: Option<[u16; 4]>,
 }
 
-impl CellData {
-    pub fn new() -> Self {
+impl Clone for CellData {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self {
+            cell_type: self.cell_type,
+            // NOTE: Without explicit `from_slice` there will be an
+            // iterator with collect instead of simple `memcpy`
+            data: SmallVec::from_slice(&self.data),
+            bit_length: self.bit_length,
+            level_mask: self.level_mask,
+            store_hashes: self.store_hashes,
+            hashes: self.hashes,
+            depths: self.depths,
+        }
+    }
+}
+
+impl Default for CellData {
+    #[inline]
+    fn default() -> Self {
         Self {
             cell_type: CellType::Ordinary,
             data: SmallVec::new(),
@@ -544,6 +562,12 @@ impl CellData {
             hashes: Some([UInt256::DEFAULT_CELL_HASH, UInt256::MIN, UInt256::MIN, UInt256::MIN]),
             depths: Some([0; 4]),
         }
+    }
+}
+
+impl CellData {
+    pub fn new() -> Self {
+        Self::default()
     }
     pub fn with_params(cell_type: CellType, data: SmallVec<[u8; 128]>, level_mask: u8, store_hashes: bool, hashes: Option<[UInt256; 4]>, depths: Option<[u16; 4]>) -> Self {
         let bit_length = find_tag(data.as_ref());
@@ -657,8 +681,8 @@ impl CellData {
             }
             writer.write_all(&[1])?;
             writer.write_all(&[len as u8])?;
-            for i in 0..len {
-                writer.write_all(hashes[i].as_slice())?;
+            for item in hashes.iter().take(len) {
+                writer.write_all(item.as_slice())?;
             }
         } else {
             writer.write_all(&[0])?;
@@ -670,8 +694,8 @@ impl CellData {
             }
             writer.write_all(&[1])?;
             writer.write_all(&[len as u8])?;
-            for i in 0..len {
-                writer.write_all(&depths[i].to_le_bytes())?;
+            for item in depths.iter().take(len) {
+                writer.write_all(&item.to_le_bytes())?;
             }
         } else {
             writer.write_all(&[0])?;
@@ -744,14 +768,21 @@ pub struct DataCell {
     tree_cell_count: u64,
 }
 
-impl DataCell {
-    pub fn new() -> Self {
+impl Default for DataCell {
+    #[inline]
+    fn default() -> Self {
         Self {
             cell_data: CellData::new(),
             references: SmallVec::new(),
             tree_bits_count: 0,
             tree_cell_count: 1,
         }
+    }
+}
+
+impl DataCell {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn with_max_depth(references: SmallVec<[Cell; 4]>, data: SmallVec<[u8; 128]>, cell_type: CellType, level_mask: u8, max_depth: u16) -> Result<DataCell> {

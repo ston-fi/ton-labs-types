@@ -22,13 +22,27 @@ use crate::types::{ExceptionCode, Result};
 
 const EXACT_CAPACITY: usize = 128;
 
-#[derive(Debug, PartialEq, Clone, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct BuilderData {
     data: SmallVec<[u8; 128]>,
     length_in_bits: usize,
     references: SmallVec<[Cell; 4]>,
     cell_type: CellType,
     level_mask: LevelMask,
+}
+
+impl Clone for BuilderData {
+    fn clone(&self) -> Self {
+        Self {
+            // NOTE: Without explicit `from_slice` there will be an
+            // iterator with collect instead of simple `memcpy`
+            data: SmallVec::from_slice(&self.data),
+            length_in_bits: self.length_in_bits,
+            references: self.references.clone(),
+            cell_type: self.cell_type,
+            level_mask: self.level_mask
+        }
+    }
 }
 
 impl From<BuilderData> for Cell {
@@ -238,7 +252,7 @@ impl BuilderData {
 
     /// returns data of cell
     pub fn cell_data(&mut self, data: &mut SmallVec<[u8; 128]>, bits: &mut usize, children: &mut SmallVec<[Cell;4]>) {
-        *data = self.data.clone();
+        *data = SmallVec::from_slice(&self.data);
         *bits = self.length_in_bits;
         children.clear();
         let n = self.references.len();
