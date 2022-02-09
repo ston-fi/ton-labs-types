@@ -16,7 +16,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::{Read, Write};
 
-use crc::{crc32, Hasher32};
+use crc::{Crc, CRC_32_ISCSI};
 use smallvec::{smallvec, SmallVec};
 
 use crate::cell::{Cell, CellType, DataCell, LevelMask};
@@ -133,7 +133,8 @@ impl BagOfCells {
     pub fn write_to_ex<T: Write>(&self, dest: &mut T, mode: BocSerialiseMode,
         custom_ref_size: Option<usize>, custom_offset_size: Option<usize>) -> Result<()> {
 
-        let dest = &mut IoCrcFilter::new(dest);
+        let mut dest_filter = IoCrcFilter::new(dest);
+        let dest = &mut dest_filter;
 
         let ref_size = if let Some(crs) = custom_ref_size { crs }
                         else { number_of_bytes_to_fit(self.cells.len()) };
@@ -256,7 +257,7 @@ impl BagOfCells {
         }
 
         if include_crc {
-            let crc = dest.sum32();
+            let (dest, crc) = dest_filter.sum32();
             dest.write_all(&crc.to_le_bytes())?;
         }
 
@@ -535,7 +536,7 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
     }
 
     if has_crc {
-        let crc = src.sum32();
+        let (src, crc) = src.sum32();
         let read_crc = src.read_le_u32()?;
         if read_crc != crc {
             fail!("crc not the same, values: {}, {}", read_crc, crc)
@@ -661,28 +662,30 @@ fn number_of_bytes_to_fit(l: usize) -> usize {
     n
 }
 
+static CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
+
 /// Filters given Write or Read object's write or read operations and calculates data's CRC
 struct IoCrcFilter<'a, T> {
     io_object: &'a mut T,
-    hasher: crc32::Digest
+    hasher: crc::Digest<'static, u32>,
 }
 
 impl<'a, T> IoCrcFilter<'a, T> {
     pub fn new(io_object: &'a mut T) -> Self {
         IoCrcFilter{
             io_object,
-            hasher: crc32::Digest::new(crc32::CASTAGNOLI)
+            hasher: CRC.digest(),
         }
     }
 
-    pub fn sum32(&self) -> u32 {
-        self.hasher.sum32()
+    pub fn sum32(self) -> (&'a mut T, u32) {
+        (self.io_object, self.hasher.finalize())
     }
 }
 
 impl<'a, T> Write for IoCrcFilter<'a, T> where T: Write {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.hasher.write(buf);
+        self.hasher.update(buf);
         self.io_object.write(buf)
     }
 
@@ -694,7 +697,7 @@ impl<'a, T> Write for IoCrcFilter<'a, T> where T: Write {
 impl<'a, T> Read for IoCrcFilter<'a, T> where T: Read {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let res = self.io_object.read(buf);
-        self.hasher.write(buf);
+        self.hasher.update(buf);
         res
     }
 }
