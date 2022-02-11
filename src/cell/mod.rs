@@ -196,7 +196,10 @@ pub trait CellImpl: Sync + Send {
 }
 
 #[derive(Clone)]
-pub struct Cell(Arc<dyn CellImpl>);
+pub struct Cell {
+    _c: countme::Count<Self>,
+    cell: Arc<dyn CellImpl>,
+}
 
 impl Cell {
     pub fn virtualize(self, offset: u8) -> Self {
@@ -210,48 +213,54 @@ impl Cell {
     }
 
     pub fn with_cell_impl<T: 'static + CellImpl>(cell_impl: T) -> Self {
-        Cell(Arc::new(cell_impl))
+        Cell {
+            _c: Default::default(),
+            cell: Arc::new(cell_impl),
+        }
     }
 
     pub fn with_cell_impl_arc(cell_impl: Arc<dyn CellImpl>) -> Self {
-        Cell(cell_impl)
+        Cell {
+            _c: Default::default(),
+            cell: cell_impl,
+        }
     }
 
     pub fn reference(&self, index: usize) -> Result<Cell> {
-        self.0.reference(index)
+        self.cell.reference(index)
     }
 
-    pub fn clone_references(&self) -> SmallVec<[Cell;4]> {
-        let count = self.0.references_count();
+    pub fn clone_references(&self) -> SmallVec<[Cell; 4]> {
+        let count = self.cell.references_count();
         let mut refs = SmallVec::with_capacity(count);
         for i in 0..count {
-            refs.push(self.0.reference(i).unwrap())
+            refs.push(self.cell.reference(i).unwrap())
         }
         refs
     }
 
     pub fn data(&self) -> &[u8] {
-        self.0.data()
+        self.cell.data()
     }
 
     pub fn cell_data(&self) -> &CellData {
-        self.0.cell_data()
+        self.cell.cell_data()
     }
 
     pub fn bit_length(&self) -> usize {
-        self.0.bit_length()
+        self.cell.bit_length()
     }
 
     pub fn cell_type(&self) -> CellType {
-        self.0.cell_type()
+        self.cell.cell_type()
     }
 
     pub fn level(&self) -> u8 {
-        self.0.level()
+        self.cell.level()
     }
 
     pub fn hashes_count(&self) -> usize {
-        self.0.level() as usize + 1
+        self.cell.level() as usize + 1
     }
 
     pub fn count_cells(&self, max: usize) -> Result<usize> {
@@ -271,21 +280,21 @@ impl Cell {
     }
 
     pub fn level_mask(&self) -> LevelMask {
-        self.0.level_mask()
+        self.cell.level_mask()
     }
 
     pub fn references_count(&self) -> usize {
-        self.0.references_count()
+        self.cell.references_count()
     }
 
     /// Returns cell's higher hash for given index (last one - representation hash)
     pub fn hash(&self, index: usize) -> UInt256 {
-        self.0.hash(index)
+        self.cell.hash(index)
     }
 
     /// Returns cell's depth for given index
     pub fn depth(&self, index: usize) -> u16 {
-        self.0.depth(index)
+        self.cell.depth(index)
     }
 
     /// Returns cell's hashes (representation and highers)
@@ -307,25 +316,25 @@ impl Cell {
     }
 
     pub fn repr_hash(&self) -> UInt256 {
-        self.0.hash(MAX_LEVEL)
+        self.cell.hash(MAX_LEVEL)
     }
 
     pub fn repr_depth(&self) -> u16 {
-        self.0.depth(MAX_LEVEL)
+        self.cell.depth(MAX_LEVEL)
     }
 
     pub fn store_hashes(&self) -> bool {
-        self.0.store_hashes()
+        self.cell.store_hashes()
     }
 
     #[allow(dead_code)]
     pub fn is_merkle(&self) -> bool {
-        self.0.is_merkle()
+        self.cell.is_merkle()
     }
 
     #[allow(dead_code)]
     pub fn is_pruned(&self) -> bool {
-        self.0.is_pruned()
+        self.cell.is_pruned()
     }
 
     pub fn to_hex_string(&self, lower: bool) -> String {
@@ -404,15 +413,15 @@ impl Cell {
         }
         Ok(indent)
     }
-    fn tree_bits_count(&self) -> u64 { self.0.tree_bits_count() }
+    fn tree_bits_count(&self) -> u64 { self.cell.tree_bits_count() }
 
-    fn tree_cell_count(&self) -> u64 { self.0.tree_cell_count() }
+    fn tree_cell_count(&self) -> u64 { self.cell.tree_cell_count() }
 }
 
 impl Deref for Cell {
     type Target = dyn CellImpl;
     fn deref(&self) -> &Self::Target {
-        self.0.deref()
+        self.cell.deref()
     }
 }
 
@@ -429,7 +438,10 @@ impl Cell {
 
 impl Default for Cell {
     fn default() -> Self {
-        Cell(Arc::new(DataCell::new()))
+        Cell{
+            _c: Default::default(),
+            cell: Arc::new(DataCell::new())
+        }
     }
 }
 
@@ -763,7 +775,7 @@ impl CellData {
 #[derive(Clone, Debug)]
 pub struct DataCell {
     cell_data: CellData,
-    references: SmallVec<[Cell;4]>,
+    references: SmallVec<[Cell; 4]>,
     tree_bits_count: u64,
     tree_cell_count: u64,
 }
@@ -803,7 +815,7 @@ impl DataCell {
         Ok(cell)
     }
 
-    pub fn with_params<TRefs>(refs: TRefs, data: SmallVec<[u8;128]>, cell_type: CellType, level_mask: u8,
+    pub fn with_params<TRefs>(refs: TRefs, data: SmallVec<[u8; 128]>, cell_type: CellType, level_mask: u8,
                               hashes: Option<[UInt256; 4]>, depths: Option<[u16; 4]>) -> Result<DataCell>
         where
             TRefs: IntoIterator<Item=Cell>
