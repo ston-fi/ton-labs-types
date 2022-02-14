@@ -36,6 +36,7 @@ sha2 = "0.9.9"
 anyhow = "1"
 thiserror = "1.0.26"
 smallvec = { version = "1.8.0", features = ["const_generics", "union", "write"] }
+rustc-hash = "1.1.0"
 
 [features]
 profile = ['countme/enable']

@@ -12,11 +12,11 @@
 */
 
 
-use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::{Read, Write};
 
 use crc::{Crc, CRC_32_ISCSI};
+use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
 use crate::cell::{Cell, CellType, DataCell, LevelMask};
@@ -45,9 +45,9 @@ pub enum BocSerialiseMode {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BagOfCells {
-    cells: HashMap<UInt256, Cell>,
+    cells: FxHashMap<UInt256, Cell>,
     sorted_rev: Vec<UInt256>,
-    absent: HashSet<UInt256>,
+    absent: FxHashSet<UInt256>,
     roots_indexes_rev: Vec<usize>,
     absent_count: usize,
 }
@@ -62,9 +62,9 @@ impl BagOfCells {
     }
 
     pub fn with_roots_and_absent(root_cells: Vec<&Cell>, absent_cells: Vec<&Cell>) -> Self {
-        let mut	cells = HashMap::<UInt256, Cell>::with_capacity(root_cells.len());
+        let mut	cells = FxHashMap::<UInt256, Cell>::with_capacity_and_hasher(root_cells.len(), Default::default());
         let mut sorted_rev = Vec::<UInt256>::new();
-        let mut absent_cells_hashes = HashSet::<UInt256>::new();
+        let mut absent_cells_hashes = FxHashSet::<UInt256>::default();
 
         for cell in absent_cells.iter() {
             absent_cells_hashes.insert(cell.repr_hash());
@@ -87,11 +87,11 @@ impl BagOfCells {
         }
     }
 
-    pub fn cells(&self) -> &HashMap<UInt256, Cell> {
+    pub fn cells(&self) -> &FxHashMap<UInt256, Cell> {
         &self.cells
     }
 
-    pub fn withdraw_cells(self) -> HashMap<UInt256, Cell> {
+    pub fn withdraw_cells(self) -> FxHashMap<UInt256, Cell> {
         self.cells
     }
 
@@ -232,7 +232,7 @@ impl BagOfCells {
         }
 
         // Cells
-        let mut hashes_to_indexes = HashMap::<&UInt256, u32>::with_capacity(self.sorted_rev.len());
+        let mut hashes_to_indexes = FxHashMap::<&UInt256, u32>::with_capacity_and_hasher(self.sorted_rev.len(), Default::default());
         for (index, cell_hash) in self.sorted_rev.iter().rev().enumerate() {
             hashes_to_indexes.insert(cell_hash, index as u32);
         }
@@ -264,8 +264,8 @@ impl BagOfCells {
         Ok(())
     }
 
-    fn traverse(cell: &Cell, cells: &mut HashMap<UInt256, Cell>, sorted: &mut Vec<UInt256>,
-        absent_cells: &HashSet<UInt256>) {
+    fn traverse(cell: &Cell, cells: &mut FxHashMap<UInt256, Cell>, sorted: &mut Vec<UInt256>,
+        absent_cells: &FxHashSet<UInt256>) {
 
         let hash = cell.repr_hash();
 
@@ -497,7 +497,7 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
         }
     }
 
-    let mut raw_cells = HashMap::with_capacity(cells_count);
+    let mut raw_cells = FxHashMap::with_capacity_and_hasher(cells_count, Default::default());
 
     // Deserialize cells
     for cell_index in 0..cells_count {
@@ -509,7 +509,7 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
     }
 
     // Resolving references & constructing cells from leaves to roots
-    let mut done_cells = HashMap::<u32, Cell>::with_capacity(cells_count);
+    let mut done_cells = FxHashMap::<u32, Cell>::with_capacity_and_hasher(cells_count, Default::default());
     for cell_index in (0..cells_count).rev() {
         let raw_cell = raw_cells.remove(&cell_index).unwrap();
         let mut refs = vec!();
