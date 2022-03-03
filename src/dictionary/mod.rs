@@ -289,6 +289,7 @@ impl SliceData {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn find_leaf<T: HashmapType + ?Sized>(
     mut data: Cell,
     path: &mut BuilderData,
@@ -1184,10 +1185,16 @@ pub enum HashmapFilterResult {
 }
 
 pub trait HashmapRemover: HashmapType {
+    fn after_remove(&mut self) -> Result<()> {
+        // it is for augmented hashmaps
+        Ok(())
+    }
     fn hashmap_remove(&mut self, key: SliceData, gas_consumer: &mut dyn GasConsumer) -> Leaf {
         let bit_len = self.bit_len();
         Self::check_key_fail(bit_len, &key)?;
-        remove_node::<Self>(self.data_mut(), bit_len, key, gas_consumer)
+        let leaf = remove_node::<Self>(self.data_mut(), bit_len, key, gas_consumer)?;
+        self.after_remove()?;
+        Ok(leaf)
     }
     fn remove(&mut self, key: SliceData) -> Leaf {
         self.hashmap_remove(key, &mut 0)
@@ -1197,6 +1204,7 @@ pub trait HashmapRemover: HashmapType {
         let bit_len = self.bit_len();
         let mut result = HashmapFilterResult::Accept;
         filter_next::<Self, _>(self.data_mut(), &mut BuilderData::default(), bit_len, &mut result, &mut func)?;
+        self.after_remove()?;
         Ok(())
     }
 }
@@ -1395,7 +1403,6 @@ fn down_by_tree<T>(prefix: &SliceData, cursor: &mut LabelReader, mut bit_len: us
         }
     }
 }
-
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct HashmapIterator<T: HashmapType + ?Sized> {

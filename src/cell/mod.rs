@@ -342,11 +342,13 @@ impl Cell {
     }
 
     fn print_indent(f: &mut fmt::Formatter, indent: &str, last_child: bool, first_line: bool) -> fmt::Result {
-        write!(f, "{}{}", indent, if first_line {
-            if last_child { " └─" } else { " ├─" }
-        } else if last_child { "   " } else { " │ " })?;
-
-        Ok(())
+        let build = match (first_line, last_child) {
+            (true, true) => " └─",
+            (true, false) => " ├─",
+            (false, true) => "   ",
+            (false, false) => " │ "
+        };
+        write!(f, "{}{}", indent, build)
     }
 
     pub fn format_without_refs(&self, f: &mut fmt::Formatter, indent: &str, last_child: bool,
@@ -361,7 +363,7 @@ impl Cell {
         write!(f, "   refs: {}", self.references_count())?;
 
         if self.data().len() > 100 {
-            writeln!(f, )?;
+            writeln!(f)?;
             if !root { Self::print_indent(f, indent, last_child, false)?; }
         } else {
             write!(f, "   ")?;
@@ -370,13 +372,13 @@ impl Cell {
         write!(f, "data: {}", self.to_hex_string(true))?;
 
         if full {
-            writeln!(f, )?;
+            writeln!(f)?;
             if !root { Self::print_indent(f, indent, last_child, false)?; }
             write!(f, "hashes:")?;
             for h in self.hashes().iter() {
                 write!(f, " {:x}", h)?;
             }
-            writeln!(f, )?;
+            writeln!(f)?;
             if !root { Self::print_indent(f, indent, last_child, false)?; }
             write!(f, "depths:")?;
             for d in self.depths().iter() {
@@ -402,7 +404,7 @@ impl Cell {
             }
             for i in 0..self.references_count() {
                 let child = self.reference(i).unwrap();
-                writeln!(f, )?;
+                writeln!(f)?;
                 indent = child.format_with_refs_tree(
                     f, indent, i == self.references_count() - 1, full, false, remaining_depth - 1)?;
             }
@@ -736,7 +738,7 @@ impl CellData {
     fn read_short_array_opt<R, T, F>(reader: &mut R, read_func: F) -> Result<Option<[T; 4]>>
         where
             R: Read,
-            T: Copy + Default,
+            T: Default,
             F: Fn(&mut R) -> Result<T>
     {
         if Self::read_bool(reader)? {
@@ -749,14 +751,14 @@ impl CellData {
     fn read_short_array<R, T, F>(reader: &mut R, read_func: F) -> Result<[T; 4]>
         where
             R: Read,
-            T: Copy + Default,
+            T: Default,
             F: Fn(&mut R) -> Result<T>
     {
         let count = reader.read_byte()?;
         if count > 4 {
             fail!("count too big {}", count)
         }
-        let mut result = [T::default(); 4];
+        let mut result = [T::default(), T::default(), T::default(), T::default()];
         for i in 0..count {
             result[i as usize] = read_func(reader)?;
         }

@@ -21,7 +21,6 @@ use crate::{error, fail, cell::{BuilderData, Cell, CellType, IBitstring, LevelMa
 use crate::types::{ExceptionCode, Result, UInt256};
 use smallvec::SmallVec;
 
-
 #[derive(Eq, Clone)]
 pub struct SliceData {
     pub(super) cell: Cell,

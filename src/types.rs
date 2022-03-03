@@ -112,12 +112,19 @@ impl UInt256 {
         true
     }
 
+    pub const fn as_array(&self) -> &[u8; 32] {
+        &self.0
+    }
+
     pub const fn as_slice(&self) -> &[u8; 32] {
         &self.0
     }
 
+    #[allow(clippy::wrong_self_convention)]
+    pub fn to_hex_string(&self) -> String { self.as_hex_string() }
+
     // Returns solid string like this: a80b23bfe4d301497f3ce11e753f23e8dec32368945ee279d044dbc1f91ace2a
-    pub fn to_hex_string(&self) -> String {
+    pub fn as_hex_string(&self) -> String {
         hex::encode(self.0)
     }
 
@@ -164,6 +171,14 @@ impl UInt256 {
 
     pub fn rand() -> Self {
         Self((0..32).map(|_| { rand::random::<u8>() }).collect::<Vec<u8>>().try_into().unwrap())
+    }
+
+    pub fn inner(self) -> [u8; 32] {
+        self.0
+    }
+
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0.to_vec()
     }
 
     pub const ZERO: UInt256 = UInt256([0; 32]);
@@ -226,9 +241,11 @@ impl fmt::Display for UInt256 {
 impl LowerHex for UInt256 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if f.alternate() {
-            write!(f, "0x")?;
+            write!(f, "0x{}", hex::encode(&self.0))
+        } else {
+            write!(f, "{}", hex::encode(&self.0))
+            // write!(f, "{}...{}", hex::encode(&self.0[..2]), hex::encode(&self.0[30..32]))
         }
-        write!(f, "{}", hex::encode(&self.0))
     }
 }
 
@@ -385,7 +402,7 @@ impl<T: std::io::Read> ByteOrderRead for T {
                 self.read_exact(&mut buf[8 - bytes..])?;
                 Ok(u64::from_be_bytes(buf) as u64)
             },
-            _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "too many bytes to read in usize")),
+            _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "too many bytes to read in u64")),
         }
     }
 
