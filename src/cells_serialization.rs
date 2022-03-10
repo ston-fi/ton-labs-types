@@ -25,6 +25,7 @@ use crate::types::UInt256;
 use crate::{Result, fail};
 
 pub const ROOT_COUNT_SOFT_LIMIT: usize = 1 << 16;
+pub const CELL_COUNT_SOFT_LIMIT: usize = 1 << 16;
 
 pub const SHA256_SIZE: usize = 32;
 pub const DEPTH_SIZE: usize = 2;
@@ -508,7 +509,12 @@ pub fn deserialize_cells_tree_ex(src: &mut &[u8]) -> Result<(Vec<Cell>, BocSeria
         None
     };
 
-    let mut raw_cells = FxHashMap::with_capacity_and_hasher(cells_count, Default::default());
+    // NOTE: Data cell contains at least 2 bytes
+    if cells_count.saturating_mul(2) > src.remaining() {
+        fail!("cell data underflow")
+    }
+
+    let mut raw_cells = FxHashMap::with_capacity_and_hasher(cells_count.min(CELL_COUNT_SOFT_LIMIT), Default::default());
 
     // Deserialize cells
     for cell_index in 0..cells_count {
@@ -538,12 +544,13 @@ pub fn deserialize_cells_tree_ex(src: &mut &[u8]) -> Result<(Vec<Cell>, BocSeria
     }
 
     let mut roots = Vec::with_capacity(roots_count);
-    if magic == BOC_GENERIC_TAG {
-        for index in roots_indexes {
-            roots.push(done_cells.get(&(index as u32)).unwrap().clone());
+
+    for &index in if magic == BOC_GENERIC_TAG { roots_indexes.as_slice() } else { &[0] } {
+        if let Some(cell) = done_cells.get(&(index as u32)) {
+            roots.push(cell.clone());
+        } else {
+            fail!("root cell not found")
         }
-    } else {
-        roots.push(done_cells.get(&0).unwrap().clone());
     }
 
     if has_crc {
@@ -716,5 +723,16 @@ impl<'a, T> Read for IoCrcFilter<'a, T> where T: Read {
         let res = self.io_object.read(buf);
         self.hasher.update(buf);
         res
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn correct_deserialization() {
+        let data = base64::decode("te6ccjEHBwIAFWtyMQcHAo8A9wBXV1dXAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABXrKioqFdXV1dXV0AAAAAAAAAAuLi4uLi4uAAAAAAAAAAAJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD78=").unwrap();
+        deserialize_tree_of_cells(&mut data.as_slice()).unwrap();
     }
 }

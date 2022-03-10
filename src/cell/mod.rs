@@ -583,10 +583,12 @@ impl CellData {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn with_params(cell_type: CellType, data: SmallVec<[u8; 128]>, level_mask: u8, store_hashes: bool, hashes: Option<[UInt256; 4]>, depths: Option<[u16; 4]>) -> Self {
+    pub fn with_params(cell_type: CellType, data: SmallVec<[u8; 128]>, level_mask: u8, store_hashes: bool, hashes: Option<[UInt256; 4]>, depths: Option<[u16; 4]>) -> Result<Self> {
         let bit_length = find_tag(data.as_ref());
-        assert!(bit_length <= MAX_DATA_BITS);
-        Self {
+        if bit_length > MAX_DATA_BITS {
+            fail!("invalid bit length")
+        }
+        Ok(Self {
             cell_type,
             data,
             bit_length: bit_length as u16,
@@ -594,7 +596,7 @@ impl CellData {
             store_hashes,
             hashes,
             depths,
-        }
+        })
     }
 
     pub fn cell_type(&self) -> CellType {
@@ -732,7 +734,7 @@ impl CellData {
         let depths = Self::read_short_array_opt(reader,
                                                 |reader| Ok(reader.read_le_u16()?))?;
 
-        Ok(Self::with_params(cell_type, data, level_mask, store_hashes, hashes, depths))
+        Self::with_params(cell_type, data, level_mask, store_hashes, hashes, depths)
     }
 
     fn read_short_array_opt<R, T, F>(reader: &mut R, read_func: F) -> Result<Option<[T; 4]>>
@@ -800,7 +802,7 @@ impl DataCell {
     }
 
     pub fn with_max_depth(references: SmallVec<[Cell; 4]>, data: SmallVec<[u8; 128]>, cell_type: CellType, level_mask: u8, max_depth: u16) -> Result<DataCell> {
-        let cell_data = CellData::with_params(cell_type, data, level_mask, false, None, None);
+        let cell_data = CellData::with_params(cell_type, data, level_mask, false, None, None)?;
         let mut tree_bits_count = cell_data.bit_length as u64;
         let mut tree_cell_count = 1;
         for reference in &references {
@@ -825,7 +827,7 @@ impl DataCell {
         assert_eq!(hashes.is_some(), depths.is_some());
 
         let store_hashes = hashes.is_some();
-        let cell_data = CellData::with_params(cell_type, data, level_mask, store_hashes, hashes, depths);
+        let cell_data = CellData::with_params(cell_type, data, level_mask, store_hashes, hashes, depths)?;
         let mut references = SmallVec::new();
         let mut tree_bits_count = cell_data.bit_length as u64;
         let mut tree_cell_count = 1;
