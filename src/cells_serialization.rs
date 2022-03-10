@@ -375,7 +375,7 @@ struct RawCell {
     pub depths: Option<[u16; 4]>,
 }
 
-pub fn deserialize_tree_of_cells(src: &[u8]) -> Result<Cell> {
+pub fn deserialize_tree_of_cells(src: &mut &[u8]) -> Result<Cell> {
     let mut cells = deserialize_cells_tree_ex(src).map(|(v, _, _, _)| v)?;
     match cells.len() {
         0 => fail!("Error parsing cells tree: empty root"),
@@ -395,12 +395,12 @@ pub fn serialize_toc(cell: &Cell) -> Result<Vec<u8>> {
 
 // Absent cells is deserialized into cell with hash. Caller have to know about the cells and process it by itself.
 // Returns vector with root cells
-pub fn deserialize_cells_tree(src: &[u8]) -> Result<Vec<Cell>> {
+pub fn deserialize_cells_tree(src: &mut &[u8]) -> Result<Vec<Cell>> {
     deserialize_cells_tree_ex(src).map(|(v, _, _, _)| v)
 }
 
-pub fn deserialize_cells_tree_ex(mut src: &[u8]) -> Result<(Vec<Cell>, BocSerialiseMode, usize, usize)> {
-    let mut src = IoCrcFilter::new(&mut src);
+pub fn deserialize_cells_tree_ex(src: &mut &[u8]) -> Result<(Vec<Cell>, BocSerialiseMode, usize, usize)> {
+    let mut src = IoCrcFilter::new(src);
     let magic = src.read_be_u32()?;
     let first_byte = src.read_byte()?;
 
