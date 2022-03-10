@@ -464,7 +464,7 @@ pub fn deserialize_cells_tree_ex(src: &mut &[u8]) -> Result<(Vec<Cell>, BocSeria
     // Root list
 
     let roots_indexes = if magic == BOC_GENERIC_TAG {
-        if roots_count * ref_size > src.remaining() {
+        if roots_count.saturating_mul(ref_size) > src.remaining() {
             fail!("cell data underflow (too big root count)")
         }
 
@@ -481,7 +481,7 @@ pub fn deserialize_cells_tree_ex(src: &mut &[u8]) -> Result<(Vec<Cell>, BocSeria
     // Index processing - extract cell's sizes to check and correct future deserialization
     let mut prev_offset = 0;
     let cells_sizes = if index_included {
-        if cells_count * offset_size > src.remaining() {
+        if cells_count.saturating_mul(offset_size) > src.remaining() {
             fail!("cell data underflow (too big cell count)")
         }
         let mut raw_index: SmallVec<[u8; 256]> = smallvec![0; cells_count * offset_size];
