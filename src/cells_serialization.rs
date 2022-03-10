@@ -24,6 +24,8 @@ use crate::types::ByteOrderRead;
 use crate::types::UInt256;
 use crate::{Result, fail};
 
+pub const ROOT_COUNT_SOFT_LIMIT: usize = 1 << 16;
+
 pub const SHA256_SIZE: usize = 32;
 pub const DEPTH_SIZE: usize = 2;
 
@@ -373,7 +375,7 @@ struct RawCell {
     pub depths: Option<[u16; 4]>,
 }
 
-pub fn deserialize_tree_of_cells<T: Read>(src: &mut T) -> Result<Cell> {
+pub fn deserialize_tree_of_cells(src: &[u8]) -> Result<Cell> {
     let mut cells = deserialize_cells_tree_ex(src).map(|(v, _, _, _)| v)?;
     match cells.len() {
         0 => fail!("Error parsing cells tree: empty root"),
@@ -393,14 +395,12 @@ pub fn serialize_toc(cell: &Cell) -> Result<Vec<u8>> {
 
 // Absent cells is deserialized into cell with hash. Caller have to know about the cells and process it by itself.
 // Returns vector with root cells
-pub fn deserialize_cells_tree<T>(src: &mut T) -> Result<Vec<Cell>> where T: Read {
+pub fn deserialize_cells_tree(src: &[u8]) -> Result<Vec<Cell>> {
     deserialize_cells_tree_ex(src).map(|(v, _, _, _)| v)
 }
 
-pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerialiseMode, usize, usize)>
-    where T: Read {
-
-    let mut src = IoCrcFilter::new(src);
+pub fn deserialize_cells_tree_ex(mut src: &[u8]) -> Result<(Vec<Cell>, BocSerialiseMode, usize, usize)> {
+    let mut src = IoCrcFilter::new(&mut src);
     let magic = src.read_be_u32()?;
     let first_byte = src.read_byte()?;
 
@@ -464,8 +464,12 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
     // Root list
 
     let roots_indexes = if magic == BOC_GENERIC_TAG {
+        if roots_count * ref_size > src.remaining() {
+            fail!("cell data underflow (too big root count)")
+        }
+
         // root_list:(roots * ##(size * 8))
-        let mut roots_indexes = Vec::with_capacity(roots_count);
+        let mut roots_indexes = Vec::with_capacity(roots_count.min(ROOT_COUNT_SOFT_LIMIT));
         for _ in 0..roots_count {
             roots_indexes.push(src.read_be_uint(ref_size)?); // cells:(##(size * 8))
         }
@@ -474,16 +478,19 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
         Vec::with_capacity(0)
     };
 
-
     // Index processing - extract cell's sizes to check and correct future deserialization
-    let mut cells_sizes: SmallVec<[usize; 256]> = smallvec![0_usize; cells_count];
     let mut prev_offset = 0;
-    if index_included {
-        let mut raw_index:SmallVec<[_; 256]> = smallvec![0; cells_count * offset_size];
+    let cells_sizes = if index_included {
+        if cells_count * offset_size > src.remaining() {
+            fail!("cell data underflow (too big cell count)")
+        }
+        let mut raw_index: SmallVec<[u8; 256]> = smallvec![0; cells_count * offset_size];
         src.read_exact(&mut raw_index)?;
 
+        let mut cells_sizes: SmallVec<[usize; 256]> = smallvec![0; cells_count];
+
         for i in 0_usize..cells_count {
-            let mut offset = std::io::Cursor::new(&raw_index[i * offset_size..i * offset_size + offset_size])
+            let mut offset = (&mut &raw_index[i * offset_size..i * offset_size + offset_size])
                 .read_be_uint(offset_size)?;
 
             if has_cache_bits {
@@ -495,7 +502,11 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
             cells_sizes[i as usize] = (offset - prev_offset) as usize;
             prev_offset = offset;
         }
-    }
+
+        Some(cells_sizes)
+    } else {
+        None
+    };
 
     let mut raw_cells = FxHashMap::with_capacity_and_hasher(cells_count, Default::default());
 
@@ -504,7 +515,7 @@ pub fn deserialize_cells_tree_ex<T>(src: &mut T) -> Result<(Vec<Cell>, BocSerial
         raw_cells.insert(
             cell_index,
             deserialize_cell(&mut src, ref_size, cell_index, cells_count,
-                if index_included { Some(cells_sizes[cell_index as usize]) } else { None })?
+                             cells_sizes.as_ref().map(|cells_sizes| cells_sizes[cell_index as usize]))?
             );
     }
 
@@ -680,6 +691,12 @@ impl<'a, T> IoCrcFilter<'a, T> {
 
     pub fn sum32(self) -> (&'a mut T, u32) {
         (self.io_object, self.hasher.finalize())
+    }
+}
+
+impl<'a> IoCrcFilter<'a, &'_ [u8]> {
+    fn remaining(&self) -> usize {
+        self.io_object.len()
     }
 }
 

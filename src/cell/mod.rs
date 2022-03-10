@@ -430,7 +430,7 @@ impl Deref for Cell {
 impl Cell {
     pub fn read_from_file(file_name: &str) -> Self {
         let bytes = std::fs::read(file_name).unwrap();
-        crate::cells_serialization::deserialize_tree_of_cells(&mut std::io::Cursor::new(bytes)).unwrap()
+        crate::cells_serialization::deserialize_tree_of_cells(&bytes).unwrap()
     }
     pub fn write_to_file(&self, file_name: &str) {
         let bytes = crate::cells_serialization::serialize_toc(self).unwrap();
