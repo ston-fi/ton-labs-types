@@ -175,6 +175,8 @@ impl BagOfCells {
             },
         };
 
+        dest.has_crc = include_crc;
+
         // TODO: CRC support
         if include_crc {
         //	unimplemented!();
@@ -440,6 +442,8 @@ pub fn deserialize_cells_tree_ex(src: &mut &[u8]) -> Result<(Vec<Cell>, BocSeria
         _ => fail!("unknown BOC_TAG: {}", magic)
     };
 
+    src.has_crc = has_crc;
+
     if ref_size == 0 || ref_size > 4 {
         fail!("ref size has to be more than 0 and less or equal 4, actual value: {}", ref_size)
     }
@@ -686,6 +690,7 @@ static CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
 struct IoCrcFilter<'a, T> {
     io_object: &'a mut T,
     hasher: crc::Digest<'static, u32>,
+    has_crc: bool,
 }
 
 impl<'a, T> IoCrcFilter<'a, T> {
@@ -693,6 +698,7 @@ impl<'a, T> IoCrcFilter<'a, T> {
         IoCrcFilter{
             io_object,
             hasher: CRC.digest(),
+            has_crc: true,
         }
     }
 
@@ -709,30 +715,30 @@ impl<'a> IoCrcFilter<'a, &'_ [u8]> {
 
 impl<'a, T> Write for IoCrcFilter<'a, T> where T: Write {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.hasher.update(buf);
+        if self.has_crc {
+            self.hasher.update(buf);
+        }
         self.io_object.write(buf)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
         self.io_object.flush()
     }
+
+    fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
+        if self.has_crc {
+            self.hasher.update(buf);
+        }
+        self.io_object.write_all(buf)
+    }
 }
 
 impl<'a, T> Read for IoCrcFilter<'a, T> where T: Read {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let res = self.io_object.read(buf);
-        self.hasher.update(buf);
+        if self.has_crc {
+            self.hasher.update(buf);
+        }
         res
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn correct_deserialization() {
-        let data = base64::decode("te6ccjEHBwIAFWtyMQcHAo8A9wBXV1dXAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABXrKioqFdXV1dXV0AAAAAAAAAAuLi4uLi4uAAAAAAAAAAAJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD78=").unwrap();
-        deserialize_tree_of_cells(&mut data.as_slice()).unwrap();
     }
 }
