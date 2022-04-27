@@ -15,11 +15,15 @@ use crate::cell::{BuilderData, SliceData};
 use num::FromPrimitive;
 use sha2::Digest;
 use std::{cmp, convert::TryInto, fmt, fmt::{LowerHex, UpperHex}, str::{self, FromStr}};
+use std::hash::BuildHasherDefault;
 use smallvec::SmallVec;
 
 pub type Result<T> = anyhow::Result<T>;
 pub type Failure = Option<anyhow::Error>;
 pub type Status = anyhow::Result<()>;
+
+pub type FxDashMap<K, V> = dashmap::DashMap<K, V, BuildHasherDefault<rustc_hash::FxHasher>>;
+pub type FxDashSet<V> = dashmap::DashSet<V, BuildHasherDefault<rustc_hash::FxHasher>>;
 
 #[macro_export]
 macro_rules! error {

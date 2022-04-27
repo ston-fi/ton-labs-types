@@ -12,7 +12,7 @@
 */
 
 use crate::{error, fail};
-use crate::types::{ExceptionCode, Result, UInt256, ByteOrderRead};
+use crate::types::{ExceptionCode, FxDashSet, Result, UInt256, ByteOrderRead};
 use crate::cells_serialization::{SHA256_SIZE, BagOfCells};
 use std::sync::{Arc, Weak};
 use std::fmt;
@@ -1070,11 +1070,11 @@ impl CellImpl for DataCell {
 struct UsageCell {
     cell: Cell,
     visit_on_load: bool,
-    visited: Weak<lockfree::set::Set<UInt256>>,
+    visited: Weak<FxDashSet<UInt256>>,
 }
 
 impl UsageCell {
-    fn new(inner: Cell, visit_on_load: bool, visited: Weak<lockfree::set::Set<UInt256>>) -> Self {
+    fn new(inner: Cell, visit_on_load: bool, visited: Weak<FxDashSet<UInt256>>) -> Self {
         let cell = Self {
             cell: inner,
             visit_on_load,
@@ -1087,7 +1087,7 @@ impl UsageCell {
     }
     fn visit(&self) -> bool {
         if let Some(visited) = self.visited.upgrade() {
-            visited.insert(self.cell.repr_hash()).ok();
+            visited.insert(self.cell.repr_hash());
             return true;
         }
         false
@@ -1217,19 +1217,19 @@ impl CellImpl for VirtualCell {
 #[derive(Default)]
 pub struct UsageTree {
     root: Cell,
-    visited: Arc<lockfree::set::Set<UInt256>>,
+    visited: Arc<FxDashSet<UInt256>>,
 }
 
 impl UsageTree {
     pub fn with_root(root: Cell) -> Self {
-        let visited = Arc::new(lockfree::set::Set::new());
+        let visited = Arc::new(Default::default());
         let usage_cell = UsageCell::new(root, false, Arc::downgrade(&visited));
         let root = Cell::with_cell_impl_arc(Arc::new(usage_cell));
         Self { root, visited }
     }
 
     pub fn with_params(root: Cell, visit_on_load: bool) -> Self {
-        let visited = Arc::new(lockfree::set::Set::new());
+        let visited = Arc::new(Default::default());
         let root = Cell::with_cell_impl_arc(Arc::new(
             UsageCell::new(root, visit_on_load, Arc::downgrade(&visited))
         ));
@@ -1257,7 +1257,7 @@ impl UsageTree {
     }
 
     /// destroy usage tree and free all cells
-    pub fn visited(self) -> lockfree::set::Set<UInt256> {
+    pub fn visited(self) -> FxDashSet<UInt256> {
         // safe because Arc is used to share weak pointers, nobody must clone this Arc
         Arc::try_unwrap(self.visited).unwrap()
     }

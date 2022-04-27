@@ -20,23 +20,21 @@ name = "ton_types"
 version = "1.10.2"
 
 [dependencies]
-lockfree = { git = "https://github.com/tonlabs/lockfree.git" }
-
-# External
-countme = "3.0.0"
+anyhow = "1"
 base64 = "0.13"
+countme = "3.0.0"
 crc = "2.1.0"
+dashmap = "5.2.0"
 hex = "0.4.3"
 log = "0.4"
 num = "0.3"
-num-traits = "0.2"
 num-derive = "0.3"
+num-traits = "0.2"
 rand = "0.8"
-sha2 = "0.9.9"
-anyhow = "1"
-thiserror = "1.0.26"
-smallvec = { version = "1.8.0", features = ["const_generics", "union", "write"] }
 rustc-hash = "1.1.0"
+sha2 = "0.9.9"
+smallvec = { version = "1.8.0", features = ["const_generics", "union", "write"] }
+thiserror = "1.0.26"
 
 [features]
 profile = ['countme/enable']
