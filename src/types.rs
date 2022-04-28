@@ -98,28 +98,32 @@ impl PartialEq<&UInt256> for UInt256 {
 }
 
 impl UInt256 {
+    #[inline(always)]
+    pub const fn default() -> Self {
+        Self::new()
+    }
 
-    pub const fn default() -> Self { Self::new() }
+    #[inline(always)]
     pub const fn new() -> Self {
         Self::ZERO
     }
+
+    #[inline(always)]
     pub const fn with_array(data: [u8; 32]) -> Self {
         Self(data)
     }
 
+    #[inline(always)]
     pub fn is_zero(&self) -> bool {
-        for b in &self.0 {
-            if b != &0 {
-                return false
-            }
-        }
-        true
+        self.0 == [0; 32]
     }
 
+    #[inline(always)]
     pub const fn as_array(&self) -> &[u8; 32] {
         &self.0
     }
 
+    #[inline(always)]
     pub const fn as_slice(&self) -> &[u8; 32] {
         &self.0
     }
@@ -138,7 +142,7 @@ impl UInt256 {
     }
 
     pub fn first_u64(&self) -> u64 {
-        u64::from_le_bytes(self.0[0..8].try_into().unwrap())
+        u64::from_be_bytes(self.0[0..8].try_into().unwrap())
     }
 
     pub fn from_raw(data: Vec<u8>, length: usize) -> Self {
@@ -169,12 +173,13 @@ impl UInt256 {
         Self(data)
     }
 
+    #[inline(always)]
     pub const fn max() -> Self {
         UInt256::MAX
     }
 
     pub fn rand() -> Self {
-        Self((0..32).map(|_| { rand::random::<u8>() }).collect::<Vec<u8>>().try_into().unwrap())
+        Self(rand::random())
     }
 
     pub fn inner(self) -> [u8; 32] {

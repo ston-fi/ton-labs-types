@@ -57,24 +57,25 @@ pub struct BagOfCells {
 
 impl BagOfCells {
     pub fn with_root(root_cell: &Cell) -> Self {
-        Self::with_roots_and_absent(vec!(root_cell), Vec::new())
+        Self::with_roots_and_absent(std::slice::from_ref(root_cell), &[])
     }
 
-    pub fn with_roots(root_cells: Vec<&Cell>) -> Self {
-        Self::with_roots_and_absent(root_cells, Vec::new())
+    pub fn with_roots(root_cells: &[Cell]) -> Self {
+        Self::with_roots_and_absent(root_cells, &[])
     }
 
-    pub fn with_roots_and_absent(root_cells: Vec<&Cell>, absent_cells: Vec<&Cell>) -> Self {
+    pub fn with_roots_and_absent(root_cells: &[Cell], absent_cells: &[Cell]) -> Self {
         let mut	cells = FxHashMap::<UInt256, Cell>::with_capacity_and_hasher(root_cells.len(), Default::default());
         let mut sorted_rev = Vec::<UInt256>::new();
         let mut absent_cells_hashes = FxHashSet::<UInt256>::default();
 
-        for cell in absent_cells.iter() {
+        for cell in absent_cells {
             absent_cells_hashes.insert(cell.repr_hash());
         }
 
         let mut roots_indexes_rev = Vec::with_capacity(root_cells.len());
-        for root_cell in root_cells.iter() {
+        for root_cell in root_cells {
+            // TODO: rewrite recursion
             Self::traverse(root_cell, &mut cells, &mut sorted_rev, &absent_cells_hashes);
             roots_indexes_rev.push(sorted_rev.len() - 1); // root must be added into `sorted_rev` back
         }
@@ -145,8 +146,8 @@ impl BagOfCells {
         let offset_size = if let Some(cos) = custom_offset_size { cos }
                             else { number_of_bytes_to_fit(total_cells_size) };
 
-        assert!(ref_size <= 4);
-        assert!(offset_size <= 8);
+        debug_assert!(ref_size <= 4);
+        debug_assert!(offset_size <= 8);
 
         let magic;
         let include_index;
@@ -177,10 +178,6 @@ impl BagOfCells {
 
         dest.has_crc = include_crc;
 
-        // TODO: CRC support
-        if include_crc {
-        //	unimplemented!();
-        }
         // TODO: figre out what `include_cache_bits` is
         if include_cache_bits {
         //	unimplemented!();
@@ -374,8 +371,7 @@ struct RawCell {
     pub level: u8,
     pub data: SmallVec<[u8; 128]>,
     pub refs: SmallVec<[u32; 4]>,
-    pub hashes: Option<[UInt256; 4]>,
-    pub depths: Option<[u16; 4]>,
+    pub hashes: Option<([UInt256; 4], [u16; 4])>,
 }
 
 pub fn deserialize_tree_of_cells(src: &mut &[u8]) -> Result<Cell> {
@@ -533,16 +529,21 @@ pub fn deserialize_cells_tree_ex(src: &mut &[u8]) -> Result<(Vec<Cell>, BocSeria
     let mut done_cells = FxHashMap::<u32, Cell>::with_capacity_and_hasher(cells_count, Default::default());
     for cell_index in (0..cells_count).rev() {
         let raw_cell = raw_cells.remove(&cell_index).unwrap();
-        let mut refs = vec!();
+        let mut references = SmallVec::with_capacity(4);
         for ref_cell_index in raw_cell.refs {
             if let Some(child) = done_cells.get(&ref_cell_index) {
-                refs.push(child.clone())
+                references.push(child.clone())
             } else {
                 fail!("unresolved reference")
             }
         }
-        let cell = DataCell::with_params(refs, raw_cell.data, raw_cell.cell_type, raw_cell.level,
-            raw_cell.hashes, raw_cell.depths)?;
+        let cell = DataCell::with_params(
+            references,
+            raw_cell.data,
+            raw_cell.cell_type,
+            raw_cell.level,
+            raw_cell.hashes
+        )?;
 
         done_cells.insert(cell_index as u32, Cell::with_cell_impl(cell));
     }
@@ -603,7 +604,6 @@ fn deserialize_cell<T>(
             level,
             cell_type: CellType::Ordinary,
             hashes: None,
-            depths: None,
         });
     }
 
@@ -623,8 +623,8 @@ fn deserialize_cell<T>(
         }
     }
 
-    let (hashes_opt, depths_opt) = if hashes {
-        let mut hashes = [UInt256::default(); 4];
+    let hashes = if hashes {
+        let mut hashes = [UInt256::ZERO; 4];
         let mut depths = [0; 4];
         let mut u256 = [0; SHA256_SIZE];
         let level = LevelMask::with_mask(level).level() as usize;
@@ -635,9 +635,9 @@ fn deserialize_cell<T>(
         for depth in depths.iter_mut().take(level + 1) {
             *depth = src.read_be_uint(DEPTH_SIZE)? as u16;
         }
-        (Some(hashes), Some(depths))
+        Some((hashes, depths))
     } else {
-        (None, None)
+        None
     };
 
     let mut cell_data = smallvec![0; data_size + if no_completion_tag { 1 } else { 0 }];
@@ -667,8 +667,7 @@ fn deserialize_cell<T>(
         refs: references,
         level,
         cell_type,
-        hashes: hashes_opt,
-        depths: depths_opt,
+        hashes,
     })
 }
 
