@@ -339,6 +339,8 @@ pub enum ExceptionCode {
     FatalError = 12,
     #[error("out of gas")]
     OutOfGas = 13,
+    #[error("illegal instruction")]
+    IllegalInstruction = 14
 }
 
 /*

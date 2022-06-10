@@ -542,6 +542,15 @@ impl SliceData {
         ret
     }
 
+    /// Returns Cell from references if present and next bit in slice is one
+    pub fn get_next_dictionary(&mut self) -> Result<Option<Cell>> {
+        if self.get_next_bit()? {
+            Ok(Some(self.checked_drain_reference()?))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Returns subslice of current slice and moves pointer
     pub fn get_next_slice(&mut self, size: usize) -> Result<SliceData> {
         let slice = self.get_slice(0, size)?;
