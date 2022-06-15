@@ -223,6 +223,22 @@ impl Cell {
         }
     }
 
+    /// Traverces all tree, ensuring that all cells are loaded
+    pub fn preload_with_depth_hint<const DEPTH_HINT: usize>(&self) -> Result<()> {
+        let mut cells = SmallVec::<[Cell; DEPTH_HINT]>::with_capacity(DEPTH_HINT);
+        for i in 0..self.references_count() {
+            cells.push(self.cell.reference(i)?);
+        }
+
+        while let Some(cell) = cells.pop() {
+            for i in 0..cell.references_count() {
+                cells.push(cell.reference(i)?);
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn reference(&self, index: usize) -> Result<Cell> {
         self.cell.reference(index)
     }
