@@ -21,6 +21,7 @@ use sha2::{Sha256, Digest};
 use std::cmp::{max, min};
 use num::{FromPrimitive, ToPrimitive};
 use smallvec::{smallvec, SmallVec};
+use enum_dispatch::enum_dispatch;
 
 pub const MAX_REFERENCES_COUNT: usize = 4;
 pub const MAX_DATA_BITS: usize = 1023;
@@ -166,6 +167,15 @@ impl fmt::Display for CellType {
     }
 }
 
+
+#[enum_dispatch]
+pub enum CellEnum{
+    DataCell,
+    UsageCell,
+    VirtualCell,
+}
+
+#[enum_dispatch(CellEnum)]
 pub trait CellImpl: Sync + Send {
     fn data(&self) -> &[u8];
     fn cell_data(&self) -> &CellData;
@@ -197,7 +207,7 @@ pub trait CellImpl: Sync + Send {
 
 #[derive(Clone)]
 pub struct Cell {
-    cell: Arc<dyn CellImpl>,
+    cell: Arc<CellEnum>,
 }
 
 impl Cell {
@@ -211,13 +221,14 @@ impl Cell {
         }
     }
 
-    pub fn with_cell_impl<T: 'static + CellImpl>(cell_impl: T) -> Self {
+    pub fn with_cell_impl<T: 'static + CellImpl>(cell_impl: T) ->Self
+        where CellEnum: From<T> {
         Cell {
-            cell: Arc::new(cell_impl),
+            cell: Arc::new(cell_impl.into()),
         }
     }
 
-    pub fn with_cell_impl_arc(cell_impl: Arc<dyn CellImpl>) -> Self {
+    pub fn with_cell_impl_arc(cell_impl: Arc<CellEnum>) -> Self {
         Cell {
             cell: cell_impl,
         }
@@ -454,7 +465,7 @@ impl Cell {
 impl Default for Cell {
     fn default() -> Self {
         Cell{
-            cell: Arc::new(DataCell::new())
+            cell: Arc::new(DataCell::new().into())
         }
     }
 }
@@ -1066,7 +1077,7 @@ impl CellImpl for DataCell {
 }
 
 #[derive(Clone)]
-struct UsageCell {
+pub struct UsageCell {
     cell: Cell,
     visit_on_load: bool,
     visited: Weak<FxDashSet<UInt256>>,
@@ -1223,14 +1234,14 @@ impl UsageTree {
     pub fn with_root(root: Cell) -> Self {
         let visited = Arc::new(Default::default());
         let usage_cell = UsageCell::new(root, false, Arc::downgrade(&visited));
-        let root = Cell::with_cell_impl_arc(Arc::new(usage_cell));
+        let root = Cell::with_cell_impl_arc(Arc::new(usage_cell.into()));
         Self { root, visited }
     }
 
     pub fn with_params(root: Cell, visit_on_load: bool) -> Self {
         let visited = Arc::new(Default::default());
         let root = Cell::with_cell_impl_arc(Arc::new(
-            UsageCell::new(root, visit_on_load, Arc::downgrade(&visited))
+            UsageCell::new(root, visit_on_load, Arc::downgrade(&visited)).into()
         ));
         Self { root, visited }
     }
