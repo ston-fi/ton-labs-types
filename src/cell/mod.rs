@@ -548,7 +548,7 @@ pub fn append_tag<const N: usize>(data: &mut SmallVec<[u8; N]>, bits: usize) {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct CellData {
     cell_type: CellType,
     data: SmallVec<[u8; 128]>,

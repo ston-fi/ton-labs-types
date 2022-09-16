@@ -46,7 +46,7 @@ pub enum BocSerialiseMode {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BagOfCells {
     cells: FxHashMap<UInt256, Cell>,
     sorted_rev: Vec<UInt256>,
