@@ -12,7 +12,7 @@
 */
 
 use crate::fail;
-use crate::cell::{BuilderData, Cell, find_tag, MAX_DATA_BITS, MAX_REFERENCES_COUNT, SliceData};
+use crate::cell::{BuilderData, find_tag, MAX_DATA_BITS, MAX_REFERENCES_COUNT, SliceData};
 use crate::types::{ExceptionCode, Result};
 
 impl BuilderData {
@@ -45,26 +45,8 @@ impl BuilderData {
         self.references().len() + count <= MAX_REFERENCES_COUNT
     }
 
-    pub fn checked_append_reference(&mut self, cell: Cell) -> Result<&mut Self> {
-        if self.references().len() >= MAX_REFERENCES_COUNT {
-            fail!(ExceptionCode::CellOverflow)
-        } else {
-            self.append_reference_cell(cell);
-            Ok(self)
-        }  
-    }
-
-    pub fn checked_prepend_reference(&mut self, cell: Cell) -> Result<&mut Self> {
-        if self.references().len() >= MAX_REFERENCES_COUNT {
-            fail!(ExceptionCode::CellOverflow)
-        } else {
-            self.prepend_reference_cell(cell);
-            Ok(self)
-        }
-    }
-
     pub fn check_enough_space(&self, size: usize) -> bool {
-        self.length_in_bits() + size <= MAX_DATA_BITS 
+        self.length_in_bits() + size <= MAX_DATA_BITS
     }
 
     pub fn checked_append_references_and_data(&mut self, other: &SliceData) -> Result<&mut Self> {
@@ -73,7 +55,7 @@ impl BuilderData {
         }
         self.append_raw(other.get_bytestring_on_stack(0).as_slice(), other.remaining_bits())?;
         for i in 0..other.remaining_references() {
-            self.append_reference_cell(other.reference(i)?);
+            self.checked_append_reference(other.reference(i)?)?;
         }
         Ok(self)
     }
@@ -164,7 +146,7 @@ impl IBitstring for BuilderData {
     }
     fn append_u128(&mut self, value: u128) -> Result<&mut Self> {
         self.append_raw(&value.to_be_bytes(), 128)
-    }    
+    }
     fn append_i8(&mut self, value: i8) -> Result<&mut Self> {
         self.append_raw(&[value as u8], 8)
     }

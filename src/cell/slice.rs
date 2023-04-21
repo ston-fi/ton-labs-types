@@ -62,6 +62,7 @@ impl Hash for SliceData {
         }
     }
 }
+
 impl PartialEq for SliceData {
     fn eq(&self, slice: &SliceData) -> bool {
         let refs_count = self.remaining_references();
@@ -101,62 +102,34 @@ impl Default for SliceData {
     }
 }
 
-// TBD
-impl From<Vec<u8>> for SliceData {
-    fn from(data: Vec<u8>) -> SliceData {
-        let len = data.len();
-        SliceData::from_raw(data, len * 8)
-    }
-}
-
-// TBD
-impl From<&[u8]> for SliceData {
-    fn from(data: &[u8]) -> SliceData {
-        let len = data.len();
-        SliceData::from_raw(data.to_vec(), len * 8)
-    }
-}
-
-// TBD
-impl From<&Cell> for SliceData {
-    fn from(cell: &Cell) -> SliceData {
-        SliceData {
-            cell: cell.clone(),
-            references_window: 0..cell.references_count(),
-            data_window: 0..cell.bit_length(),
-        }
-    }
-}
-
-impl From<Cell> for SliceData {
-    fn from(cell: Cell) -> SliceData {
-        SliceData {
-            references_window: 0..cell.references_count(),
-            data_window: 0..cell.bit_length(),
-            cell
-        }
-    }
-}
-
 impl SliceData {
-    // TODO: need to be const
-    pub fn default() -> SliceData {
-        Self {
-            cell: Cell::default(),
-            data_window: 0..0,
-            references_window: 0..0,
-        }
-    }
     pub fn new_empty() -> SliceData {
         SliceData::default()
     }
 
+    pub fn load_builder(builder: BuilderData) -> Result<SliceData> {
+        SliceData::load_cell(builder.into_cell()?)
+    }
+
+    pub fn load_cell(cell: Cell) -> Result<SliceData> {
+        if cell.is_pruned() {
+            fail!(ExceptionCode::PrunedCellAccess)
+        } else {
+            Ok(SliceData {
+                references_window: 0..cell.references_count(),
+                data_window: 0..cell.bit_length(),
+                cell
+            })
+        }
+    }
+
+    pub fn load_cell_ref(cell: &Cell) -> Result<SliceData> {
+        SliceData::load_cell(cell.clone())
+    }
+
     pub fn from_string(value: &str) -> Result<SliceData> {
-        Ok(parse_slice_base(value, 0, 16)
-            .ok_or_else(|| error!(ExceptionCode::FatalError))
-            .and_then(BuilderData::with_bitstring)?
-            .into_cell()?
-            .into())
+        let vec = parse_slice_base(value, 0, 16).ok_or_else(|| error!(ExceptionCode::FatalError))?;
+        SliceData::load_builder(BuilderData::with_bitstring(vec)?)
     }
 
     pub fn remaining_references(&self) -> usize {
@@ -228,14 +201,14 @@ impl SliceData {
 
     pub fn remaining_data(&self) -> BuilderData {
         let start = self.data_window.start / 8;
-        let end = self.data_window.end / 8;
+        let end = (self.data_window.end + 7) / 8;
         if self.data_window.start >= self.data_window.end {
             return BuilderData::new()
         }
         let trailing = self.data_window.start % 8;
         if trailing == 0 {
             BuilderData::with_raw(
-                SmallVec::from_slice(&self.cell.data()[start..=end]),
+                SmallVec::from_slice(&self.cell.data()[start..end]),
                 self.remaining_bits()
             ).unwrap()
         } else if trailing + self.remaining_bits() <= 8 {
@@ -244,7 +217,7 @@ impl SliceData {
         } else {
             let vec = smallvec::smallvec![self.cell.data()[start] << trailing];
             let mut builder = BuilderData::with_raw(vec, 8 - trailing).unwrap();
-            builder.append_raw(& self.cell.data()[start + 1..=end], trailing + self.remaining_bits() - 8).unwrap();
+            builder.append_raw(& self.cell.data()[start + 1..end], trailing + self.remaining_bits() - 8).unwrap();
             builder
         }
     }
@@ -367,7 +340,7 @@ impl SliceData {
             if q < self.cell.data().len() - 1 {
                 ret |= self.cell.data()[q + 1] as u16;
             }
-            Ok(((ret >> (8 - r)) as u8 >> (8 - bits)) as u8)
+            Ok((ret >> (8 - r)) as u8 >> (8 - bits))
         }
     }
 
@@ -628,7 +601,7 @@ impl SliceData {
             }
             let a_bits = a.get_bits(offset, last_bits_len).unwrap();
             let b_bits = b.get_bits(offset, last_bits_len).unwrap();
-            let diff = (a_bits ^ b_bits) as u8;
+            let diff = a_bits ^ b_bits;
             let mut diff = diff.leading_zeros() as usize;
             diff -= 8 - last_bits_len;
             let diff = cmp::min(diff, last_bits_len);
@@ -660,7 +633,7 @@ impl SliceData {
             let mut builder = BuilderData::from_slice(prefix);
             self.move_by(prefix.remaining_bits())?;
             builder.append_bytestring(self)?;
-            *self = builder.into_cell()?.into();
+            *self = SliceData::load_builder(builder)?;
             Ok(())
         }
     }
@@ -720,18 +693,18 @@ impl SliceData {
     pub fn new(data: Vec<u8>) -> SliceData {
         match crate::find_tag(data.as_slice()) {
             0 => SliceData::default(),
-            length_in_bits => BuilderData::with_raw(data.into(), length_in_bits).unwrap().into_cell().unwrap().into()
+            length_in_bits => SliceData::from_raw(data, length_in_bits)
         }
     }
 
     pub fn from_raw(data: Vec<u8>, length_in_bits: usize) -> SliceData {
-        BuilderData::with_raw(data.into(), length_in_bits).unwrap().into_cell().unwrap().into()
+        SliceData::load_builder(BuilderData::with_raw(data.into(), length_in_bits).unwrap()).unwrap()
     }
 
     pub fn append_reference(&mut self, other: SliceData) -> &mut SliceData {
         let mut builder = BuilderData::from_slice(self);
-        builder.append_reference_cell(other.into_cell());
-        *self = builder.into_cell().expect("it should be used only in tests").into();
+        builder.checked_append_reference(other.into_cell()).unwrap();
+        *self = SliceData::load_builder(builder).expect("it should be used only in tests");
         self
     }
 

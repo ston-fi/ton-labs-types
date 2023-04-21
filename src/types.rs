@@ -18,9 +18,10 @@ use std::{cmp, convert::TryInto, fmt, fmt::{LowerHex, UpperHex}, str::{self, Fro
 use std::hash::BuildHasherDefault;
 use smallvec::SmallVec;
 
-pub type Result<T> = anyhow::Result<T>;
+pub type Error = anyhow::Error;
+pub type Result<T> = std::result::Result<T, anyhow::Error>;
 pub type Failure = Option<anyhow::Error>;
-pub type Status = anyhow::Result<()>;
+pub type Status = Result<()>;
 
 pub type FxDashMap<K, V> = dashmap::DashMap<K, V, BuildHasherDefault<rustc_hash::FxHasher>>;
 pub type FxDashSet<V> = dashmap::DashSet<V, BuildHasherDefault<rustc_hash::FxHasher>>;
@@ -56,6 +57,7 @@ macro_rules! fail {
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[repr(transparent)]
 pub struct UInt256([u8; 32]);
 
 impl PartialEq<SliceData> for UInt256 {
@@ -199,18 +201,21 @@ impl UInt256 {
 }
 
 impl From<[u8; 32]> for UInt256 {
+    #[inline]
     fn from(data: [u8; 32]) -> Self {
         UInt256(data)
     }
 }
 
 impl From<UInt256> for [u8; 32] {
+    #[inline]
     fn from(data: UInt256) -> Self {
         data.0
     }
 }
 
 impl From<&[u8; 32]> for UInt256 {
+    #[inline]
     fn from(data: &[u8; 32]) -> Self {
         UInt256(*data)
     }
@@ -250,9 +255,9 @@ impl fmt::Display for UInt256 {
 impl LowerHex for UInt256 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if f.alternate() {
-            write!(f, "0x{}", hex::encode(&self.0))
+            write!(f, "0x{}", hex::encode(self.0.as_slice()))
         } else {
-            write!(f, "{}", hex::encode(&self.0))
+            write!(f, "{}", hex::encode(self.0.as_slice()))
             // write!(f, "{}...{}", hex::encode(&self.0[..2]), hex::encode(&self.0[30..32]))
         }
     }
@@ -263,7 +268,7 @@ impl UpperHex for UInt256 {
         if f.alternate() {
             write!(f, "0x")?;
         }
-        write!(f, "{}", hex::encode_upper(&self.0))
+        write!(f, "{}", hex::encode_upper(self.0))
     }
 }
 
@@ -283,19 +288,19 @@ pub type AccountId = SliceData;
 
 impl From<[u8; 32]> for AccountId {
     fn from(data: [u8; 32]) -> AccountId {
-        BuilderData::with_raw(SmallVec::from_slice(&data), 256).unwrap().into_cell().unwrap().into()
+        SliceData::load_builder(BuilderData::with_raw(SmallVec::from_slice(&data), 256).unwrap()).unwrap()
     }
 }
 
 impl From<UInt256> for AccountId {
     fn from(data: UInt256) -> AccountId {
-        BuilderData::with_raw(SmallVec::from_slice(&data.0), 256).unwrap().into_cell().unwrap().into()
+        SliceData::load_builder(BuilderData::with_raw(SmallVec::from_slice(&data.0), 256).unwrap()).unwrap()
     }
 }
 
 impl From<&UInt256> for AccountId {
     fn from(data: &UInt256) -> AccountId {
-        BuilderData::with_raw(SmallVec::from_slice(&data.0), 256).unwrap().into_cell().unwrap().into()
+        SliceData::load_builder(BuilderData::with_raw(SmallVec::from_slice(&data.0), 256).unwrap()).unwrap()
     }
 }
 
@@ -340,7 +345,9 @@ pub enum ExceptionCode {
     #[error("out of gas")]
     OutOfGas = 13,
     #[error("illegal instruction")]
-    IllegalInstruction = 14
+    IllegalInstruction = 14,
+    #[error("pruned cell")]
+    PrunedCellAccess = 15
 }
 
 /*
@@ -411,7 +418,7 @@ impl<T: std::io::Read> ByteOrderRead for T {
             5..=8 => {
                 let mut buf = [0; 8];
                 self.read_exact(&mut buf[8 - bytes..])?;
-                Ok(u64::from_be_bytes(buf) as u64)
+                Ok(u64::from_be_bytes(buf))
             },
             _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "too many bytes to read in u64")),
         }
