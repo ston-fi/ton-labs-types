@@ -627,7 +627,7 @@ pub(crate) const ABSENT_D1: u8 = (1 << 4) | 7;
 // next byte is desription byte 2 contains data size (in special encoding, see cell_data_len)
 
 #[inline(always)]
-pub(crate) fn calc_d1(
+pub fn calc_d1(
     level_mask: LevelMask,
     store_hashes: bool,
     cell_type: CellType,
@@ -640,7 +640,7 @@ pub(crate) fn calc_d1(
 }
 
 #[inline(always)]
-pub(crate) fn calc_d2(data_bit_len: usize) -> u8{
+pub fn calc_d2(data_bit_len: usize) -> u8{
     ((data_bit_len / 8) << 1) as u8 + (data_bit_len % 8 != 0) as u8
 }
 
