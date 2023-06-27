@@ -241,7 +241,11 @@ impl SliceData {
     }
 
     pub fn reference(&self, i: usize) -> Result<Cell> {
-        Ok(self.reference_opt(i).ok_or(ExceptionCode::CellUnderflow)?)
+        if self.references_window.start + i < self.references_window.end {
+            self.cell.reference(self.references_window.start + i)
+        } else {
+            Err(ExceptionCode::CellUnderflow.into())
+        }
     }
 
     pub fn reference_opt(&self, i: usize) -> Option<Cell> {
